@@ -1,0 +1,293 @@
+/* ============================================================
+   discord-in-office — 엑셀 위장 테마 (의도적으로 투박한 버전)
+   상단 26px 리본 + 24px 수식 막대, 하단 22px 시트 탭을 가정
+   ============================================================ */
+
+/* ---------- 공간 예약 ---------- */
+html, body {
+  overflow: hidden !important;
+  background: #f3f3f3 !important;
+}
+#app-mount {
+  position: fixed !important;
+  top: 50px !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 22px !important;
+  width: auto !important;
+  height: auto !important;
+}
+
+/* ---------- 디스코드 색상 변수 재정의(라이트 강제) ---------- */
+.theme-dark, .theme-darker, .theme-light {
+  --background-primary: #ffffff !important;
+  --background-secondary: #f6f6f6 !important;
+  --background-secondary-alt: #ececec !important;
+  --background-tertiary: #e8e8e8 !important;
+  --background-floating: #ffffff !important;
+  --background-mobile-primary: #ffffff !important;
+  --background-mobile-secondary: #f6f6f6 !important;
+  --channeltextarea-background: #ffffff !important;
+  --activity-card-background: #ffffff !important;
+  --home-background: #f6f6f6 !important;
+  --text-normal: #333333 !important;
+  --text-muted: #7a7a7a !important;
+  --text-link: #0b6e4f !important;
+  --header-primary: #333333 !important;
+  --header-secondary: #666666 !important;
+  --interactive-normal: #555555 !important;
+  --interactive-hover: #217346 !important;
+  --interactive-active: #1b5e38 !important;
+  --interactive-muted: #aaaaaa !important;
+  --channels-default: #555555 !important;
+  --channel-icon: #777777 !important;
+  --scrollbar-auto-thumb: #c4c4c4 !important;
+  --scrollbar-auto-track: transparent !important;
+  --scrollbar-thin-thumb: #c4c4c4 !important;
+}
+
+/* 엑셀은 둥근 모서리가 없다 */
+#app-mount * { border-radius: 0 !important; }
+
+/* 강제 라이트 테마 보조 */
+:root { color-scheme: light !important; }
+body { background: #fff !important; }
+
+/* 채널 사이드바: 선택 채널 = 엑셀 선택 셀 틴트 */
+[class^="sidebar"] [class*="modeSelected"],
+[class^="sidebar"] [class*="selected"] {
+  background: #e2efda !important;
+  box-shadow: inset 2px 0 0 #217346 !important;
+}
+
+/* 스크롤바 얇고 회색 */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: #c4c4c4; }
+::-webkit-scrollbar-track { background: transparent; }
+
+/* ---------- 서버 목록 = 왼쪽 세로 눈금 ---------- */
+[class*="guilds"] {
+  background: #ececec !important;
+  border-right: 1px solid #cfcfcf !important;
+}
+[class*="guilds"] img,
+[class*="guilds"] svg { filter: grayscale(.45); opacity: .85; }
+
+/* ---------- 채널 사이드바 ---------- */
+[class^="sidebar"] {
+  background: #f6f6f6 !important;
+  border-right: 1px solid #d9d9d9 !important;
+}
+[class^="sidebar"] [class*="scroller"] { background: transparent !important; }
+
+/* ---------- 채팅 = 워크시트 ---------- */
+[class^="chat"] { background: #fff !important; }
+[class^="chat"] [class*="chatContent"],
+[class^="chat"] [class*="messagesWrapper"] { background: #fff !important; }
+
+/* 메시지 목록: 왼쪽에 행번호 세로줄 공간 확보 */
+[class^="chat"] [class*="scroller"] { padding-left: 38px !important; }
+
+[class^="chat"] ol[role="list"],
+[class^="chat"] div[role="list"] { counter-reset: dio-row; }
+
+li[id^="chat-messages"] {
+  counter-increment: dio-row;
+  position: relative;
+  margin: 0 !important;
+  border-bottom: 1px solid #e4e4e4 !important;
+  background: #fff !important;
+}
+li[id^="chat-messages"]:hover { background: #f3f8f3 !important; }
+
+li[id^="chat-messages"]::before {
+  content: counter(dio-row);
+  position: absolute;
+  left: -38px;
+  top: 0;
+  width: 32px;
+  height: 100%;
+  padding-top: 10px;
+  box-sizing: border-box;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  font-size: 11px;
+  color: #7a7a7a;
+  background: #efefef;
+  border-right: 1px solid #d9d9d9;
+}
+
+/* 입력창 = 수식 입력 셀 취급 */
+[class*="channelTextArea"] {
+  background: #fff !important;
+  border: 1px solid #c6c6c6 !important;
+}
+
+/* 멤버 목록 = 오른쪽 틀 고정 창 */
+[class^="members"] {
+  background: #fafafa !important;
+  border-left: 1px solid #d9d9d9 !important;
+}
+
+/* ============================================================
+   주입된 엑셀 크롬 (dio.js가 만든 요소)
+   ============================================================ */
+
+#dio-ribbon {
+  position: fixed; top: 0; left: 0; right: 0; height: 26px; z-index: 99999;
+  background: #217346; display: flex; align-items: stretch;
+  font-size: 12px; user-select: none; overflow: hidden;
+}
+#dio-ribbon .dio-brand {
+  padding: 0 12px; font-weight: 700; color: #fff;
+  background: #1b5e38; display: flex; align-items: center; letter-spacing: .04em;
+}
+#dio-ribbon .dio-tab {
+  padding: 0 13px; display: flex; align-items: center;
+  color: #dff0e6; cursor: default;
+}
+#dio-ribbon .dio-tab:hover { color: #fff; }
+#dio-ribbon .dio-tab.dio-on { background: #fff; color: #217346; font-weight: 600; }
+#dio-ribbon .dio-fname {
+  margin-left: auto; padding-right: 12px; align-self: center;
+  color: #cfe7da; font-size: 11px;
+}
+
+#dio-formula {
+  position: fixed; top: 26px; left: 0; right: 0; height: 24px; z-index: 99999;
+  background: #fff; border-bottom: 1px solid #c6c6c6;
+  display: flex; align-items: stretch;
+  font-size: 12px; color: #333; user-select: none;
+}
+#dio-formula .dio-cellref {
+  width: 70px; border-right: 1px solid #c6c6c6; background: #fafafa;
+  display: flex; align-items: center; justify-content: center;
+}
+#dio-formula .dio-fxlab {
+  padding: 0 9px; color: #888; font-style: italic;
+  display: flex; align-items: center; border-right: 1px solid #e2e2e2;
+}
+#dio-formula .dio-finput {
+  flex: 1; padding: 0 8px; display: flex; align-items: center;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+#dio-sheetbar {
+  position: fixed; bottom: 0; left: 0; right: 0; height: 22px; z-index: 99999;
+  background: #f3f3f3; border-top: 1px solid #c6c6c6;
+  display: flex; align-items: stretch;
+  font-size: 11px; color: #444; user-select: none;
+}
+#dio-sheetbar .dio-sheet {
+  padding: 0 16px; display: flex; align-items: center;
+  border-right: 1px solid #d9d9d9; background: #ececec; cursor: default;
+}
+#dio-sheetbar .dio-sheet.dio-on {
+  background: #fff; color: #217346; font-weight: 700;
+  box-shadow: inset 0 2px 0 #217346;
+}
+#dio-sheetbar .dio-status {
+  margin-left: auto; padding-right: 12px; align-self: center; color: #888;
+}
+
+/* 숨김 모드에서 이모지·스티커 대신 나오는 텍스트 설명 */
+.dio-emolabel {
+  display: none;
+  font-size: 12px;
+  line-height: 1.2;
+  padding: 0 4px;
+  margin: 0 2px;
+  background: #fdf3d7;
+  border: 1px solid #e8d48b;
+  color: #7a5c00;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+/* 숨김 모드의 "눌러서 사진보기" 버튼 (엑셀 회색 버튼 투박 버전) */
+.dio-viewbtn {
+  display: none;
+  align-items: center;
+  height: 24px;
+  padding: 0 10px;
+  margin: 2px 0;
+  background: #fdfdfd;
+  border: 1px solid #adadad;
+  color: #333;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  user-select: none;
+}
+.dio-viewbtn:hover,
+.dio-viewbtn:focus-visible {
+  background: #e8f4ec;
+  border-color: #217346;
+  color: #217346;
+}
+/* 펼쳐진 사진: 다시 눌러 접을 수 있음 */
+li[id^="chat-messages"] img[data-dio-expanded="1"] {
+  cursor: zoom-out;
+}
+/* 미디어 컨테이너 한가운데 뜨는 형태 (캐러셀·첨부 이미지용) */
+.dio-viewbtn.dio-float {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  margin: 0;
+  height: 28px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, .3);
+  z-index: 5;
+}
+
+/* 스티커 라벨: 스티커 컨테이너 중앙 */
+.dio-emolabel.dio-stick {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  margin: 0;
+  z-index: 4;
+}
+/* 접힌 상태: 라벨이 컨테이너 폭을 만들도록 흐름 배치 */
+.dio-emolabel.dio-stick.dio-static {
+  position: static;
+  transform: none;
+  display: inline-block;
+}
+.dio-hide .dio-emolabel.dio-stick {
+  cursor: pointer;
+}
+.dio-hide .dio-emolabel.dio-stick:hover {
+  background: #fff3c4;
+  border-color: #217346;
+  color: #217346;
+}
+
+/* 숨김 모드의 아바타 마스크 (이니셜 회색 셀) */
+.dio-avatar-mask {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: #d9d9d9;
+  border: 1px solid #bcbcbc;
+  color: #666;
+  font-size: 13px;
+  font-weight: 600;
+  box-sizing: border-box;
+  flex: none;
+  overflow: hidden;
+}
+
+/* 텍스트 이모지: 숨김 모드에서만 노트 스타일 */
+.dio-hide .dio-emoji-text {
+  background: #fdf3d7;
+  border: 1px solid #e8d48b;
+  color: #7a5c00;
+  font-size: 12px;
+  padding: 0 3px;
+  margin: 0 1px;
+  white-space: nowrap;
+}

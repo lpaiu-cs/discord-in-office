@@ -1,0 +1,12 @@
+{
+  "name": "discord-in-office",
+  "version": "0.1.0",
+  "description": "Discord를 투박한 Excel 화면으로 위장해 주는 Electron 래퍼",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^36.0.0"
+  }
+}
