@@ -5,6 +5,14 @@
    앞의 번호가 곧 순서다 — 바꾸면 깨진다. */
   /* ---------- 엑셀 크롬 ---------- */
   let cellRefEl, formulaEl, statusEl;
+  let hideBtn, panelBtn;
+
+  /* 버튼이 지금 상태를 보여줘야 "이미 눌려 있는지" 를 알 수 있다.
+     엑셀 리본의 토글 단추처럼 눌린 것만 배경을 준다. */
+  function syncRibbon() {
+    if (hideBtn) hideBtn.classList.toggle('dio-pressed', !DIO.visible);
+    if (panelBtn) panelBtn.classList.toggle('dio-pressed', !DIO.panels);
+  }
 
   function buildChrome() {
     if (document.getElementById('dio-ribbon')) return;
@@ -15,8 +23,30 @@
     ['파일', '홈', '삽입', '그리기', '수식', '데이터', '검토', '보기', '도움말'].forEach(
       (t) => rib.append(el('dio-tab' + (t === '홈' ? ' dio-on' : ''), t))
     );
+
+    /* 단축키만 두면 눌렸는지 알 수 없고, 단축키를 모르면 쓸 수도 없다.
+       리본에 눌린 상태가 보이는 버튼으로도 둔다.
+       클릭은 preload 통로로 메인 프로세스에 보낸다 — 단축키·메뉴와 같은 곳으로
+       모아야 설정 저장과 메뉴 라벨 갱신이 어긋나지 않는다. */
+    hideBtn = el('dio-rbtn', '내용 가리기');
+    hideBtn.title = '이모지·사진·임베드·프로필 가리기 (Ctrl+E)';
+    panelBtn = el('dio-rbtn', '탐색 창');
+    panelBtn.title = '서버·채널 목록 접기/펴기 (Ctrl+Shift+B)';
+
+    const send = (name, local) => (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const bridge = window.dioBridge;
+      if (bridge && bridge[name]) bridge[name]();
+      else local(); // 통로가 없으면 최소한 화면만이라도 바뀌게 (저장은 안 된다)
+    };
+    hideBtn.addEventListener('click', send('toggleEmoji', () => window.__dioSetEmoji(!DIO.visible)));
+    panelBtn.addEventListener('click', send('togglePanels', () => window.__dioSetPanels(!DIO.panels)));
+
+    rib.append(hideBtn, panelBtn);
     rib.append(el('dio-fname', FILE_NAME + '  —  저장됨'));
     document.body.append(rib);
+    syncRibbon();
 
     const fb = document.createElement('div');
     fb.id = 'dio-formula';

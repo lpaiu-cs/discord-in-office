@@ -269,6 +269,33 @@ async function testMasking(wc) {
     '검색'
   );
 
+  /* 단축키만 있으면 지금 눌려 있는지 알 수 없고, 단축키를 모르면 쓰지도 못한다.
+     리본에 상태가 보이는 버튼이 있어야 한다. */
+  console.log('\n[리본] 토글 버튼');
+  check('버튼 2개 존재', await js(wc, '__count("#dio-ribbon .dio-rbtn")'), 2);
+  check(
+    '가리는 중이면 눌린 표시',
+    await js(wc, 'document.querySelectorAll("#dio-ribbon .dio-rbtn")[0].classList.contains("dio-pressed")'),
+    true
+  );
+  check(
+    '패널이 펴져 있으면 안 눌린 표시',
+    await js(wc, 'document.querySelectorAll("#dio-ribbon .dio-rbtn")[1].classList.contains("dio-pressed")'),
+    false
+  );
+  // 브리지가 없는 픽스처에서는 로컬 토글로 떨어진다 — 화면은 바뀌어야 한다
+  await js(wc, 'document.querySelectorAll("#dio-ribbon .dio-rbtn")[1].click()');
+  await wait(400);
+  check('패널 버튼 클릭이 먹음', await js(wc, '__vis(".guilds__a1")'), 'hidden');
+  check(
+    '클릭 후 눌린 표시로 바뀜',
+    await js(wc, 'document.querySelectorAll("#dio-ribbon .dio-rbtn")[1].classList.contains("dio-pressed")'),
+    true
+  );
+  await js(wc, 'document.querySelectorAll("#dio-ribbon .dio-rbtn")[1].click()');
+  await wait(400);
+  check('다시 눌러 원복', await js(wc, '__vis(".guilds__a1")'), 'visible');
+
   console.log('\n[가림] 패널 접기');
   await js(wc, 'window.__dioSetPanels(false)');
   await wait(300);

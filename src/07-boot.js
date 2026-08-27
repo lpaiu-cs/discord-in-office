@@ -99,6 +99,7 @@
   window.__dioSetPanels = function (visible) {
     DIO.panels = !!visible;
     document.body.classList.toggle('dio-nopanel', !DIO.panels);
+    syncRibbon();
   };
 
   window.__dioSetEmoji = function (visible) {
@@ -106,6 +107,7 @@
     // 다시 숨김으로 들어갈 때 예전에 펼쳐둔 것들이 살아나면 곤란하다
     if (DIO.visible) expanded.clear();
     document.body.classList.toggle('dio-hide', !DIO.visible);
+    syncRibbon();
     fullScan();
   };
 
@@ -117,6 +119,7 @@
     document.body.classList.toggle('dio-hide', !DIO.visible);
     document.body.classList.toggle('dio-nopanel', !DIO.panels);
     buildChrome();
+    syncRibbon();
     if (!DIO.booted) {
       DIO.booted = true;
       setInterval(() => { wantFull = true; schedule(); }, BACKUP_MS);

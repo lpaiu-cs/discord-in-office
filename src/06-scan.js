@@ -157,7 +157,24 @@
     chromeMo.observe(w.root, CHROME_OBSERVE);
   }
 
+  /* 상단 바 찾기 — CSS 의 :has() 를 대신한다.
+     실측 구조가 div.title_c38106 > div.title_edbb22 이므로, "title_" 안에
+     "title_" 이 바로 들어 있는 바깥 컨테이너가 그 바다. 한 번 찾으면 붙잡고
+     있다가 떨어져 나갔을 때만 다시 찾는다. */
+  let topBar = null;
+  function tagTopBar() {
+    if (topBar && topBar.isConnected) {
+      // React 가 class 를 다시 쓰면 우리 표시가 지워진다
+      if (!topBar.classList.contains('dio-topbar')) topBar.classList.add('dio-topbar');
+      return;
+    }
+    const inner = document.querySelector('[class*="title_" i] > [class*="title_" i]');
+    topBar = inner && inner.parentElement;
+    if (topBar) topBar.classList.add('dio-topbar');
+  }
+
   function scanChromeText() {
+    tagTopBar();
     const found = [];
     for (const spec of CHROME_TEXT) {
       for (const root of qsa(spec.root)) {

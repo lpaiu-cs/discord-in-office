@@ -149,17 +149,25 @@ try {
   if (bOk) {
     check('플래그대로 안 가린 상태로 부팅', b.boot.hide, false);
     check('Ctrl+Shift+B 로 패널 접힘', b.log.indexOf('"nopanel":true') > -1, true);
-    check('패널 토글이 저장됨', b.cfg && b.cfg.panelsVisible, false);
   /* 여기가 핵심이다. 패널만 토글했는데 --dio-visible 이 emojiVisible 로 새어
-     들어가면, 다음 실행이 가려지지 않은 채 뜬다. */
-    check('일회성 플래그가 저장 설정을 오염시키지 않음', b.cfg && b.cfg.emojiVisible, false);
+     들어가면, 다음 실행이 가려지지 않은 채 뜬다.
+     패널은 저장 대상이 아니므로 이 실행에서는 설정 파일이 아예 안 써지는 것이
+     정상이다 — 파일이 없거나, 있어도 false 여야 한다. */
+    check(
+      '일회성 플래그가 저장 설정을 오염시키지 않음',
+      !b.cfg || b.cfg.emojiVisible === false,
+      true
+    );
   }
 
-  console.log(NL + '[실행] 같은 설정으로 다시 — 안전한 기본값이 남아 있어야 한다');
+  console.log(NL + '[실행] 같은 설정으로 다시 — 가림은 남고 패널은 다시 펴져야 한다');
   const c = run(appDir, ud, [], []);
   if (ranOk('재실행', c)) {
     check('플래그 없이 다시 띄우면 가린 상태', c.boot.hide, true);
-    check('접어둔 패널은 유지', c.boot.nopanel, true);
+    /* 패널 상태는 일부러 저장하지 않는다. 접어둔 채로 껐다가 켜면 지금 어느
+       채널인지 알 수 없는 화면으로 시작해서, 눌린 줄도 모르고 헤매게 된다. */
+    check('접었어도 다음 실행은 펴진 상태', c.boot.nopanel, false);
+    check('패널 상태는 저장되지 않음', !c.cfg || c.cfg.panelsVisible === undefined, true);
   }
 
   console.log(NL + '[실행] Ctrl+E 로 명시적으로 바꾼 것은 저장된다');
