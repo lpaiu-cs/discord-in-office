@@ -11,7 +11,9 @@ const SPOOF_TITLE = '재고관리_2026.xlsx - Excel';
 let win = null;
 let injected = false;
 
-const cfg = { emojiVisible: true, panelsVisible: true };
+// 기본은 가린 상태다. 위장이 목적인 도구라 안 가려진 채로 뜨면 앞뒤가 안 맞는다.
+// 잠깐 원본을 보려면 Ctrl+E, 항상 보이게 두려면 npm run start:visible.
+const cfg = { emojiVisible: false, panelsVisible: true };
 const configPath = () => path.join(app.getPath('userData'), 'config.json');
 
 function loadCfg() {
@@ -21,6 +23,7 @@ function loadCfg() {
 // npm run start:hidden 을 한 번 썼다고 이후 npm start 가 숨김으로 남으면 곤란하다.
 function applyCliFlags() {
   if (process.argv.includes('--dio-hidden')) cfg.emojiVisible = false;
+  if (process.argv.includes('--dio-visible')) cfg.emojiVisible = true;
   if (process.argv.includes('--dio-nopanel')) cfg.panelsVisible = false;
 }
 
