@@ -98,8 +98,17 @@
      서로 밀어내며 DOM 을 계속 건드린다. */
   const CHROME_ROOTS = CHROME_TEXT.map((s) => s.root).join(', ');
 
-  // 안내문은 짧다. 이보다 길면 대화 내용일 가능성이 높다.
-  const CHROME_MAX = 60;
+  /* 안내문 길이 상한 — 대화 한 덩어리가 통째로 들어오는 걸 막는 안전장치다.
+     오인 방지의 본체는 이게 아니라 구조 선택자(search__ / placeholder)다.
+
+     디스코드는 서버·채널 이름을 **100자까지** 허용한다. 여기에 고정 문구가
+     붙으므로 실제로 나올 수 있는 최대치는:
+       "<서버명 100자> 검색"            → 103
+       "#<채널명 100자>에 메시지 보내기" → 110
+       "Message #<채널명 100자>"        → 109
+     처음에 60으로 잡았더니 긴 이름에서 그대로 노출됐다. 다른 로케일의 고정
+     문구가 더 길 수 있어 여유를 둔다. */
+  const CHROME_MAX = 160;
 
   function applyChromeText(root, spec) {
     if (!root || !root.isConnected) return;

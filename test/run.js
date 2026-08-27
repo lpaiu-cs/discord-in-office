@@ -198,6 +198,31 @@ async function testMasking(wc) {
     await js(wc, 'document.querySelector(".messageContent__r5").textContent.trim()'),
     '회의록 검색'
   );
+
+  /* 디스코드 서버·채널 이름은 100자까지 만들 수 있다. 안내문 길이에 임의의
+     상한을 두면 그런 이름에서 그대로 노출된다 — 이름을 항상 가린다는 계약이
+     현실적인 입력에서 깨지는 것이라 반드시 확인한다. */
+  await js(
+    wc,
+    [
+      'const long = "가".repeat(100);',
+      'document.querySelector(".search__49676 span span").textContent = long + " 검색";',
+      'document.querySelector(".placeholder__1b31f").textContent =',
+      '  "#" + "나".repeat(100) + "에 메시지 보내기";',
+      'true;'
+    ].join('\n')
+  );
+  await wait(600);
+  check(
+    '100자 서버 이름도 가려짐',
+    await js(wc, 'document.querySelector(".search__49676").textContent.trim()'),
+    '검색'
+  );
+  check(
+    '100자 채널 이름도 가려짐',
+    await js(wc, 'document.querySelector(".placeholder__1b31f").textContent.trim()'),
+    '값을 입력하십시오'
+  );
   check(
     '검색창 아이콘은 남아 있음',
     await js(wc, '!!document.querySelector(".search__49676 svg")'),
