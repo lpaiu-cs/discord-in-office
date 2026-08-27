@@ -187,6 +187,27 @@ async function testMasking(wc) {
     '값을 입력하십시오'
   );
 
+  /* React 는 서버·채널을 옮길 때 텍스트 노드를 그대로 둔 채 nodeValue 만
+     갈아끼우기도 한다. 그건 characterData 변이라 addedNodes 가 없어서
+     childList 만 보는 스케줄러는 스캔을 예약하지 않는다. 4초 백업 스캔이
+     돌기 전까지 서버 이름이 그대로 보이면 "항상 가린다" 는 계약이 깨진다.
+     아래 대기 시간은 백업 주기(4초)보다 한참 짧게 잡았다. */
+  await js(
+    wc,
+    [
+      'const s = [...document.querySelectorAll(".search__49676 *")]',
+      '  .find(e => [...e.childNodes].some(n => n.nodeType === 3 && n.textContent.trim()));',
+      's.firstChild.nodeValue = "다른서버 검색";',
+      'true;'
+    ].join('\n')
+  );
+  await wait(500);
+  check(
+    '텍스트 노드만 갱신돼도 즉시 다시 가림',
+    await js(wc, 'document.querySelector(".search__49676").textContent.trim()'),
+    '검색'
+  );
+
   console.log('\n[가림] 패널 접기');
   await js(wc, 'window.__dioSetPanels(false)');
   await wait(300);

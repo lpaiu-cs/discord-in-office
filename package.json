@@ -8,7 +8,8 @@
     "start:visible": "electron . --dio-visible",
     "start:stealth": "electron . --dio-hidden --dio-nopanel",
     "test": "electron test",
-    "test:live": "electron test/live.js"
+    "test:live": "electron test/live.js",
+    "test:launch": "node test/launch.js"
   },
   "devDependencies": {
     "electron": "^36.0.0"

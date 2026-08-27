@@ -88,7 +88,27 @@
     }
   ];
 
+  function applyChromeText(el, spec) {
+    if (!el || !el.isConnected) return;
+    const cur = el.textContent.trim();
+    if (cur === spec.want || !spec.match.test(cur)) return;
+    el.textContent = spec.want;
+  }
+
+  /* 스캔 스케줄러는 childList 만 관측한다. 그런데 React 는 서버·채널을 옮길 때
+     placeholder 의 텍스트 노드를 그대로 둔 채 nodeValue 만 갈아끼우기도 한다.
+     그건 characterData 변이라 addedNodes 가 없어 스캔이 예약되지 않고, 4초 백업
+     스캔이 돌 때까지 서버 이름이 그대로 보인다 — "항상 가린다" 가 계약인
+     기능에서 4초는 너무 길다.
+     문서 전역에 characterData 를 걸면 메시지마다 콜백이 터지므로, 우리가 실제로
+     문구를 바꾼 요소 두어 개에만 좁게 붙인다. */
+  let chromeWatch = [];
+  const chromeMo = new MutationObserver(() => {
+    for (const w of chromeWatch) applyChromeText(w.el, w.spec);
+  });
+
   function scanChromeText() {
+    const found = [];
     for (const spec of CHROME_TEXT) {
       for (const root of qsa(spec.root)) {
         const box = spec.pick ? root.querySelector(spec.pick) : root;
@@ -103,10 +123,21 @@
         const el = owners[owners.length - 1];
         if (!el || el.closest('input, textarea, [contenteditable="true"]')) continue;
 
-        const cur = el.textContent.trim();
-        if (cur === spec.want || !spec.match.test(cur)) continue;
-        el.textContent = spec.want;
+        applyChromeText(el, spec);
+        found.push({ el, spec });
       }
+    }
+
+    /* 관측 대상 갱신은 전체 스캔에서만 한다. 증분 스캔은 이 컨테이너들을 훑지
+       않아 found 가 비어 있을 수 있는데, 그걸로 다시 걸면 관측이 끊긴다. */
+    if (roots) return;
+    const same =
+      found.length === chromeWatch.length && found.every((f, i) => f.el === chromeWatch[i].el);
+    if (same) return;
+    chromeMo.disconnect();
+    chromeWatch = found;
+    for (const w of found) {
+      chromeMo.observe(w.el, { characterData: true, childList: true, subtree: true });
     }
   }
 
