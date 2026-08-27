@@ -8,6 +8,7 @@
     roots = rootList && rootList.length ? rootList : null;
     const t0 = performance.now();
     DIO.scans = (DIO.scans || 0) + 1;
+    resetScanCaches(); // 스캔 사이에는 계산 스타일 캐시를 믿지 않는다
     try {
       enforceLightTheme();
       void forceLightTokens(); // 성공 후에는 boolean 체크 한 번으로 끝난다

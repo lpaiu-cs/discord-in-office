@@ -116,11 +116,17 @@
         });
       }
 
-      const desc = spec.text(node, box);
+      /* 펼친 상태에서 라벨을 감추면 다시 접을 방법이 없어진다.
+         스티커·사진은 collapseBack 으로 원본을 눌러 접지만, 임베드는 안에 제목
+         링크가 있어 원본 클릭을 가로챌 수 없다. 그런 패스는 라벨을 접기
+         컨트롤로 남긴다(keepLabel). */
+      const reopened = !DIO.visible && show; // 숨김 모드인데 펼쳐둔 상태
+      const keep = reopened && spec.keepLabel;
+      const desc = keep ? spec.collapseText || '[접기]' : spec.text(node, box);
       if (lab.textContent !== desc) lab.textContent = desc;
 
       setDisplay(node, show);
-      const labVal = show ? 'none' : spec.labelShow || 'inline';
+      const labVal = show && !keep ? 'none' : spec.labelShow || 'inline';
       if (lab.style.display !== labVal) lab.style.display = labVal;
 
       // excel.css 의 cursor:zoom-out 규칙이 이 속성을 본다.

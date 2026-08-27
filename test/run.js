@@ -158,6 +158,19 @@ async function testMasking(wc) {
 
   check('패널은 그대로', await js(wc, '__vis(".guilds__a1")'), 'visible');
 
+  /* 배경이미지는 나중에 붙을 수 있다 — SPA 는 같은 banner 노드를 유지한 채
+     길드 전환이나 비동기 로딩으로 style 만 바꾼다. 계산 스타일을 노드 수명 내내
+     캐시해 두면 첫 스캔의 'none' 을 계속 믿어서 이 배너를 못 가린다. */
+  check('아직 배경 없는 배너는 그대로', await js(wc, '__vis(".bannerLate__b9")'), 'visible');
+  await js(
+    wc,
+    'document.querySelector(".bannerLate__b9").style.backgroundImage =' +
+      ' "url(https://cdn.discordapp.com/banners/1/x.png)"; true;'
+  );
+  await js(wc, '__DIO.scan()');
+  await wait(400);
+  check('나중에 붙은 배너도 가려짐', await js(wc, '__vis(".bannerLate__b9")'), 'hidden');
+
   console.log('\n[가림] 패널 접기');
   await js(wc, 'window.__dioSetPanels(false)');
   await wait(300);
@@ -184,9 +197,26 @@ async function testExpand(wc) {
   console.log('\n[펼치기] 라벨 클릭');
   await boot(wc, 'masking.html', { emojiVisible: false, panelsVisible: true });
 
+  check('임베드 iframe 접힘', await js(wc, '__vis(".embedPlayer__e6")'), 'hidden');
   await js(wc, 'document.querySelector(".embedWrapper__e1").nextElementSibling.click()');
   await wait(500);
   check('임베드 펼쳐짐', await js(wc, '__vis(".embedWrapper__e1")'), 'visible');
+  /* 펼쳤으면 안의 플레이어까지 나와야 한다. CSS 안전망이 .dio-hide 동안 iframe 을
+     항상 display:none !important 로 눌러버리면, 펼쳐도 영상이 재생되지 않는다. */
+  check('펼치면 iframe 플레이어도 나옴', await js(wc, '__vis(".embedPlayer__e6")'), 'visible');
+  /* 그리고 다시 접을 수 있어야 한다. .click() 은 display:none 요소에도 먹으므로
+     "클릭이 동작한다" 만으로는 부족하다 — 사람이 누를 수 있는지를 본다. */
+  check(
+    '펼친 뒤에도 접기 컨트롤이 보임',
+    await js(wc, '__vis(".embedWrapper__e1 + .dio-emolabel")'),
+    'visible'
+  );
+  await js(wc, 'document.querySelector(".embedWrapper__e1").nextElementSibling.click()');
+  await wait(500);
+  check('임베드 다시 접힘', await js(wc, '__vis(".embedWrapper__e1")'), 'hidden');
+  await js(wc, 'document.querySelector(".embedWrapper__e1").nextElementSibling.click()');
+  await wait(500);
+  check('임베드 재펼침', await js(wc, '__vis(".embedWrapper__e1")'), 'visible');
 
   await js(wc, 'document.querySelector(".stickerAsset__s2").nextElementSibling.click()');
   await wait(500);

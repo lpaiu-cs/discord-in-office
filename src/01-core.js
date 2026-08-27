@@ -19,8 +19,22 @@
      roots가 null이면 전체 문서, 아니면 그 서브트리만 훑는다.
      getComputedStyle은 강제 스타일 재계산을 부르므로 요소당 한 번만 하고 캐시한다. */
   let roots = null;
-  const posFixed = new WeakSet();
-  const bgCache = new WeakMap();
+
+  /* 요소 -> 우리가 position:relative 를 넣었는지.
+     단순히 "봤다" 만 기억하면, 디스코드가 style 속성을 다시 써서 우리 값이
+     지워졌을 때 영영 복구하지 못한다. 원래 배치가 있던 요소(false)와
+     우리가 손댄 요소(true)를 구분해 후자만 다시 채운다. */
+  const posFixed = new WeakMap();
+
+  /* backgroundImage 캐시는 한 번의 스캔 안에서만 유효하다.
+     SPA 는 같은 banner/splash 노드를 유지한 채 길드 전환이나 비동기 로딩으로
+     style 만 바꾼다. 영구 캐시로 두면 첫 스캔의 'none' 을 계속 믿어서
+     나중에 붙은 배너를 숨기지 못한다 — 숨김 모드에서 그대로 노출된다.
+     대상이 배너·스플래시 몇 개뿐이라 스캔마다 다시 읽어도 싸다. */
+  let bgCache = new WeakMap();
+  function resetScanCaches() {
+    bgCache = new WeakMap();
+  }
 
   function qsa(sel) {
     if (!roots) return document.querySelectorAll(sel);
@@ -34,9 +48,15 @@
   }
 
   function ensurePos(node) {
-    if (!node || node.nodeType !== 1 || posFixed.has(node)) return;
-    posFixed.add(node);
-    if (getComputedStyle(node).position === 'static') node.style.position = 'relative';
+    if (!node || node.nodeType !== 1) return;
+    // 계산 스타일 읽기는 강제 레이아웃을 부르므로 요소당 한 번만 한다.
+    if (!posFixed.has(node)) {
+      posFixed.set(node, getComputedStyle(node).position === 'static');
+    }
+    // 인라인 style 읽기는 계산 스타일과 달리 레이아웃을 부르지 않아 매번 해도 싸다.
+    if (posFixed.get(node) && node.style.position !== 'relative') {
+      node.style.position = 'relative';
+    }
   }
 
   /* ---------- 디스코드 선택자 ----------

@@ -94,8 +94,13 @@
       // box 를 두지 않는다 — 임베드는 자기 자신이 접기 단위다.
       // collapseBack 도 켜지 않는다: 임베드 안에는 제목 링크가 있어서
       // 원본 클릭을 가로채면 링크를 못 누르게 된다. (스티커·사진은 링크가 없다)
-      labelClass: 'dio-emolabel dio-stick',
-      labelShow: 'inline',
+      // 대신 keepLabel 로 펼친 뒤에도 접기 컨트롤을 남긴다.
+      // dio-stick(가운데 절대배치)은 쓰지 않는다 — 펼친 임베드 한가운데를 덮으면
+      // 그 아래 링크를 못 누른다. 흐름 배치로 두면 접힌 자리/펼친 아래에 붙는다.
+      labelClass: 'dio-emolabel',
+      labelShow: 'inline-block',
+      keepLabel: true,
+      collapseText: '[임베드 접기]',
       title: '눌러서 임베드 펼치기',
       text: embedLabelText
     });

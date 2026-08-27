@@ -319,3 +319,11 @@ li[id^="chat-messages"] img[data-dio-expanded="1"] {
 
 /* 유튜브 등 임베드 플레이어 iframe */
 .dio-hide li[id^="chat-messages"] iframe { display: none !important; }
+
+/* 단, 펼친 임베드 안의 플레이어는 다시 나와야 한다.
+   위 규칙만 있으면 라벨을 눌러 펼쳐도 iframe 이 계속 눌려 영상이 재생되지 않는다.
+   data-dio-expanded 는 dio.js 가 남기는 펼침 상태의 표시용 미러다.
+   선택자가 더 구체적이라 같은 !important 끼리도 이쪽이 이긴다. */
+.dio-hide li[id^="chat-messages"] [data-dio-expanded="1"] iframe {
+  display: revert !important;
+}
