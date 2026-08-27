@@ -54,8 +54,8 @@ html, body {
 body { background: #fff !important; }
 
 /* 채널 사이드바: 선택 채널 = 엑셀 선택 셀 틴트 */
-[class^="sidebar"] [class*="modeSelected"],
-[class^="sidebar"] [class*="selected"] {
+[class^="sidebar" i] [class*="modeSelected" i],
+[class^="sidebar" i] [class*="selected" i] {
   background: #e2efda !important;
   box-shadow: inset 2px 0 0 #217346 !important;
 }
@@ -66,30 +66,30 @@ body { background: #fff !important; }
 ::-webkit-scrollbar-track { background: transparent; }
 
 /* ---------- 서버 목록 = 왼쪽 세로 눈금 ---------- */
-[class*="guilds"] {
+[class*="guilds" i] {
   background: #ececec !important;
   border-right: 1px solid #cfcfcf !important;
 }
-[class*="guilds"] img,
-[class*="guilds"] svg { filter: grayscale(.45); opacity: .85; }
+[class*="guilds" i] img,
+[class*="guilds" i] svg { filter: grayscale(.45); opacity: .85; }
 
 /* ---------- 채널 사이드바 ---------- */
-[class^="sidebar"] {
+[class^="sidebar" i] {
   background: #f6f6f6 !important;
   border-right: 1px solid #d9d9d9 !important;
 }
-[class^="sidebar"] [class*="scroller"] { background: transparent !important; }
+[class^="sidebar" i] [class*="scroller" i] { background: transparent !important; }
 
 /* ---------- 채팅 = 워크시트 ---------- */
-[class^="chat"] { background: #fff !important; }
-[class^="chat"] [class*="chatContent"],
-[class^="chat"] [class*="messagesWrapper"] { background: #fff !important; }
+[class^="chat" i] { background: #fff !important; }
+[class^="chat" i] [class*="chatContent" i],
+[class^="chat" i] [class*="messagesWrapper" i] { background: #fff !important; }
 
 /* 메시지 목록: 왼쪽에 행번호 세로줄 공간 확보 */
-[class^="chat"] [class*="scroller"] { padding-left: 38px !important; }
+[class^="chat" i] [class*="scroller" i] { padding-left: 38px !important; }
 
-[class^="chat"] ol[role="list"],
-[class^="chat"] div[role="list"] { counter-reset: dio-row; }
+[class^="chat" i] ol[role="list"],
+[class^="chat" i] div[role="list"] { counter-reset: dio-row; }
 
 li[id^="chat-messages"] {
   counter-increment: dio-row;
@@ -119,13 +119,13 @@ li[id^="chat-messages"]::before {
 }
 
 /* 입력창 = 수식 입력 셀 취급 */
-[class*="channelTextArea"] {
+[class*="channelTextArea" i] {
   background: #fff !important;
   border: 1px solid #c6c6c6 !important;
 }
 
 /* 멤버 목록 = 오른쪽 틀 고정 창 */
-[class^="members"] {
+[class^="members" i] {
   background: #fafafa !important;
   border-left: 1px solid #d9d9d9 !important;
 }
@@ -291,3 +291,31 @@ li[id^="chat-messages"] img[data-dio-expanded="1"] {
   margin: 0 1px;
   white-space: nowrap;
 }
+
+/* ============================================================
+   좌측 패널 접기 (Ctrl+Shift+B)
+   서버 목록과 채널 목록을 통째로 없애 워크시트만 남긴다.
+   ============================================================ */
+.dio-nopanel [class*="guilds" i],
+.dio-nopanel [class^="sidebar" i] { display: none !important; }
+
+/* ============================================================
+   숨김 모드 안전망
+   JS 스캔이 닿기 전에도 프로필·서버 이미지가 번쩍이지 않도록 CSS로 먼저 가린다.
+   클래스명(디스코드가 수시로 바꾼다)이 아니라 CDN 경로로 잡는 게 핵심이다.
+   ============================================================ */
+.dio-hide img[src*="cdn.discordapp.com/avatars/"],
+.dio-hide img[src*="cdn.discordapp.com/guilds/"],
+.dio-hide img[src*="cdn.discordapp.com/icons/"],
+.dio-hide img[src*="cdn.discordapp.com/banners/"],
+.dio-hide img[src*="cdn.discordapp.com/role-icons/"],
+.dio-hide img[src*="cdn.discordapp.com/clan-badges/"],
+.dio-hide img[src*="/embed/avatars/"] { visibility: hidden !important; }
+
+/* 배경이미지로 그려지는 아바타 (img 태그가 아닌 형태) */
+.dio-hide [style*="cdn.discordapp.com/avatars/"],
+.dio-hide [style*="cdn.discordapp.com/icons/"],
+.dio-hide [style*="/embed/avatars/"] { background-image: none !important; }
+
+/* 유튜브 등 임베드 플레이어 iframe */
+.dio-hide li[id^="chat-messages"] iframe { display: none !important; }

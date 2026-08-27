@@ -1,0 +1,53 @@
+<!-- 성능 픽스처.
+     디스코드와 비슷한 밀도(약 5000 노드)와 변화율(60ms마다 4행 교체)을 흉내낸다.
+     실제 디스코드는 프레즌스·타이핑·가상스크롤로 DOM 을 쉬지 않고 바꾸는데,
+     스캔 구조의 비용은 그 변화율에서만 드러난다. -->
+<meta charset="utf-8"><title>chat churn fixture</title>
+<style>body{margin:0;font:13px sans-serif}li{list-style:none;padding:4px 8px;display:flex;gap:8px}
+img{width:32px;height:32px}</style>
+<div id="app-mount" class="theme-darker">
+  <div class="guilds__a1"></div>
+  <div class="sidebar__b2"></div>
+  <div class="chat__c3"><ol id="rows"></ol></div>
+</div>
+<script>
+const PX = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+const EMO = ['😀', '👍', '😂', '🔥', '❤', '🎉', '🤔', '✅'];
+const NAMES = ['김대리', '박과장', '이사원', '최부장', '정주임'];
+let seq = 0;
+
+function row() {
+  const i = seq++;
+  const el = document.createElement('li');
+  el.id = 'chat-messages-999-' + i;
+  el.setAttribute('role', 'article');
+  el.innerHTML =
+    '<img class="avatar__h' + (i % 7) + '" src="' + PX + '" alt="' + NAMES[i % 5] + '">' +
+    '<div class="contents__x"><span class="username__y">' + NAMES[i % 5] + '</span>' +
+    '<div class="markup__z">회의 일정 공유합니다 ' + EMO[i % 8] +
+    ' 확인 부탁드려요 ' + EMO[(i + 3) % 8] + '</div></div>';
+  return el;
+}
+
+const ol = document.getElementById('rows');
+for (let i = 0; i < 900; i++) ol.append(row());
+
+const g = document.querySelector('.guilds__a1');
+for (let i = 0; i < 25; i++) {
+  const im = document.createElement('img');
+  im.src = PX;
+  im.className = 'guildIcon__q';
+  g.append(im);
+}
+
+// 가상 스크롤 흉내: 위에서 4개 제거하고 아래에 4개 추가
+window.__driver = setInterval(() => {
+  for (let k = 0; k < 4; k++) {
+    if (ol.firstElementChild) ol.firstElementChild.remove();
+    ol.append(row());
+  }
+}, 60);
+
+window.__nodeCount = () => document.querySelectorAll('*').length;
+window.__stopDriver = () => clearInterval(window.__driver);
+</script>

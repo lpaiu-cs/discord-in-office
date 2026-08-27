@@ -2,19 +2,28 @@ const { app, BrowserWindow, Menu, shell } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 const os = require('node:os');
+const bundle = require('./bundle');
 
 const APP_URL = 'https://discord.com/app';
+const APP_ORIGIN = 'https://discord.com';
 const SPOOF_TITLE = '재고관리_2026.xlsx - Excel';
 
 let win = null;
 let injected = false;
 
-const cfg = { emojiVisible: true };
+const cfg = { emojiVisible: true, panelsVisible: true };
 const configPath = () => path.join(app.getPath('userData'), 'config.json');
 
 function loadCfg() {
   try { Object.assign(cfg, JSON.parse(fs.readFileSync(configPath(), 'utf8'))); } catch {}
 }
+// CLI 플래그는 이번 실행에만 적용하고 저장하지 않는다.
+// npm run start:hidden 을 한 번 썼다고 이후 npm start 가 숨김으로 남으면 곤란하다.
+function applyCliFlags() {
+  if (process.argv.includes('--dio-hidden')) cfg.emojiVisible = false;
+  if (process.argv.includes('--dio-nopanel')) cfg.panelsVisible = false;
+}
+
 function saveCfg() {
   try {
     fs.mkdirSync(path.dirname(configPath()), { recursive: true });
@@ -28,11 +37,15 @@ async function injectAll() {
   const wc = win.webContents;
   // 디버그 이터레이션을 위해 매 적용 시 디스크에서 새로 읽는다
   const css = fs.readFileSync(path.join(__dirname, 'excel.css'), 'utf8');
-  const js = fs.readFileSync(path.join(__dirname, 'dio.js'), 'utf8');
+  const js = bundle(); // src/*.js 를 순서대로 이어붙인 것
   try {
     await wc.insertCSS(css);
     await wc.executeJavaScript(
-      js + `;__DIO_BOOT(${JSON.stringify({ emojiVisible: cfg.emojiVisible })});`
+      js +
+        `;__DIO_BOOT(${JSON.stringify({
+          emojiVisible: cfg.emojiVisible,
+          panelsVisible: cfg.panelsVisible
+        })});`
     );
   } catch (e) {
     injected = false;
@@ -96,17 +109,41 @@ function createWindow() {
   });
 
   const wc = win.webContents;
-  wc.session.setPermissionRequestHandler((_, perm, cb) => {
-    cb(['media', 'notifications', 'fullscreen', 'pointerLock', 'clipboard-sanitized-write'].includes(perm));
-  });
+  // notifications 는 일부러 뺐다 — OS 알림 팝업에 보낸 사람과 메시지 내용이
+  // 그대로 떠서 위장이 통째로 무의미해진다. 알림이 필요하면 아래 배열에
+  // 'notifications' 를 다시 넣으면 된다.
+  const ALLOWED_PERMS = ['media', 'fullscreen', 'pointerLock', 'clipboard-sanitized-write'];
+  wc.session.setPermissionRequestHandler((_, perm, cb) => cb(ALLOWED_PERMS.includes(perm)));
+  // 예전 구현은 https 링크를 in-app 창(action:'allow')으로 열었다. 엑셀이 아닌
+  // 브라우저 창이 떠서 위장이 즉시 깨지고, 임의 웹 콘텐츠가 Electron 창에서
+  // 도는 문제도 있었다. 이제 http(s)만 기본 브라우저로 넘기고 나머지는 막는다.
   wc.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith('https://')) return { action: 'allow' };
-    shell.openExternal(url);
+    if (/^https?:\/\//i.test(url)) shell.openExternal(url);
     return { action: 'deny' };
   });
-  // 사진 원본 클릭 등으로 창이 통째로 이동하는 사고 방지
+  // 사진 원본 클릭 등으로 창이 통째로 외부 사이트로 이동하는 사고 방지.
+  // 단 APP_URL 접두사로 비교하면 discord.com 안에서의 정상 이동(로그인
+  // 리다이렉트, /channels/@me, OAuth 콜백)까지 막힌다. 오리진으로 판단한다.
   wc.on('will-navigate', (e, url) => {
-    if (!url.startsWith(APP_URL)) e.preventDefault();
+    let sameSite = false;
+    try { sameSite = new URL(url).origin === APP_ORIGIN; } catch {}
+    if (!sameSite) e.preventDefault();
+  });
+  // 디스코드 웹이 Ctrl+E(이모지 피커) 같은 키를 자체 처리해서 메뉴 액셀러레이터가
+  // 먹히지 않는다. before-input-event 는 렌더러보다 먼저 도는 메인 프로세스 훅이라
+  // 여기서 preventDefault 하면 디스코드가 그 키를 아예 못 본다.
+  wc.on('before-input-event', (e, input) => {
+    if (input.type !== 'keyDown' || input.alt) return;
+    const mod = process.platform === 'darwin' ? input.meta : input.control;
+    if (!mod) return;
+    const key = (input.key || '').toLowerCase();
+    if (key === 'e' && !input.shift) {
+      e.preventDefault();
+      toggleEmoji();
+    } else if (key === 'b' && input.shift) {
+      e.preventDefault();
+      togglePanels();
+    }
   });
   wc.on('did-start-loading', () => { injected = false; });
   wc.on('did-finish-load', () => {
@@ -114,9 +151,11 @@ function createWindow() {
     if (DEBUG) startDebugLoop(win.webContents);
   });
 
+  // 디스코드는 읽지 않은 개수가 바뀔 때마다 제목을 갱신한다.
+  // setTitle은 Win32 호출이라 같은 값이면 건너뛴다.
   win.on('page-title-updated', (e) => {
     e.preventDefault();
-    win.setTitle(SPOOF_TITLE);
+    if (win.getTitle() !== SPOOF_TITLE) win.setTitle(SPOOF_TITLE);
   });
   win.on('closed', () => { win = null; });
 
@@ -140,7 +179,15 @@ function buildMenu() {
         {
           label: cfg.emojiVisible ? '이모지 숨기기 (텍스트 설명)' : '이모지 다시 보이기',
           accelerator: 'CmdOrCtrl+E',
+          registerAccelerator: false, // 실제 처리는 before-input-event
           click: toggleEmoji
+        },
+        {
+          label: cfg.panelsVisible ? '서버·채널 목록 숨기기' : '서버·채널 목록 보이기',
+          // Ctrl+B는 디스코드 입력창의 굵게 서식이라 피한다
+          accelerator: 'CmdOrCtrl+Shift+B',
+          registerAccelerator: false, // 실제 처리는 before-input-event
+          click: togglePanels
         },
         { type: 'separator' },
         { role: 'reload', label: '새로고침' },
@@ -157,6 +204,15 @@ function buildMenu() {
   ]);
 }
 
+function togglePanels() {
+  cfg.panelsVisible = !cfg.panelsVisible;
+  saveCfg();
+  if (win) {
+    win.webContents.executeJavaScript(`window.__dioSetPanels(${cfg.panelsVisible})`).catch(() => {});
+  }
+  Menu.setApplicationMenu(buildMenu());
+}
+
 function toggleEmoji() {
   cfg.emojiVisible = !cfg.emojiVisible;
   saveCfg();
@@ -169,6 +225,7 @@ function toggleEmoji() {
 app.whenReady().then(() => {
   app.userAgentFallback = app.userAgentFallback.replace(/\s?Electron\/[\d.]+/, '');
   loadCfg();
+  applyCliFlags();
   createWindow();
   Menu.setApplicationMenu(buildMenu());
 });
