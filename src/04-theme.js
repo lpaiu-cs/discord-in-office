@@ -14,24 +14,81 @@
   let lightBusy = false;
   const cssCache = new Map();
 
+  /* 동시 요청 수. 실측에서 시트 303장을 한꺼번에 던졌더니 토큰이 다 적용되기까지
+     20.6초가 걸렸고, 그 사이 디스코드 자신의 리소스 로딩과 경쟁해서 로딩 화면이
+     중간에 멈춰 보였다. 몇 개씩 나눠 받으면 총 시간은 비슷해도 남의 요청을
+     굶기지 않는다. */
+  const FETCH_AT_ONCE = 6;
+
+  /* 라이트 테마 토큰을 그대로 쓰면 답장·멘션 강조가 주황빛으로 남는다.
+     엑셀 워크시트에 그런 색이 있을 리 없다. 추출한 값 위에 덮어쓰면
+     excel.css 와의 우선순위 다툼 없이 확실히 눌린다. */
+  const TOKEN_OVERRIDE = {
+    '--background-mentioned': 'transparent',
+    '--background-mentioned-hover': 'transparent',
+    '--background-message-highlight': 'transparent',
+    '--background-message-highlight-hover': 'transparent'
+  };
+
+  const LIGHT_SCOPE =
+    ':root,.theme-light,.theme-dark,.theme-darker,.theme-midnight,.theme-darkest,.theme-ash';
+
+  function buildLightCss(map) {
+    let out = LIGHT_SCOPE + '{';
+    for (const [k, v] of map) out += k + ':' + v + ' !important;';
+    return out + '}';
+  }
+
+  function applyLightCss(css) {
+    let st = document.getElementById('dio-light-tokens');
+    if (!st) {
+      st = document.createElement('style');
+      st.id = 'dio-light-tokens';
+      document.head.appendChild(st);
+    }
+    if (st.textContent !== css) st.textContent = css;
+    DIO.lightCssApplied = true;
+  }
+
+  /* 지난 실행에서 뽑아둔 것을 메인 프로세스가 넘겨준다. 있으면 즉시 적용하고
+     수집은 건너뛴다 — 시작이 20초 걸리던 원인이 그 수집이었다. */
+  function useCachedLightCss(css) {
+    if (!css) return false;
+    applyLightCss(css);
+    DIO.lightFromCache = true;
+    return true;
+  }
+
+  async function fetchSheets(links) {
+    let next = 0;
+    const worker = async () => {
+      while (next < links.length) {
+        const href = links[next++];
+        if (cssCache.has(href)) continue;
+        try {
+          cssCache.set(href, await (await fetch(href, { cache: 'force-cache' })).text());
+        } catch {
+          cssCache.set(href, '');
+        }
+      }
+    };
+    await Promise.all(
+      Array.from({ length: Math.min(FETCH_AT_ONCE, links.length) }, worker)
+    );
+  }
+
   async function forceLightTokens() {
     if (DIO.lightCssApplied || lightBusy) return;
+    /* 부팅 직후에는 돌리지 않는다. 우리 주입은 디스코드가 아직 자기 화면을
+       그리는 중에 들어가는데, 거기서 2.8MB 를 더 받아 가면 로딩이 멈춰 보인다.
+       엑셀 배경·글자색은 excel.css 가 이미 고정하므로 몇 초 늦어도 티가 안 난다. */
+    if (!DIO.lightAllowed) return;
     const links = [...document.querySelectorAll('link[rel="stylesheet"]')].map((l) => l.href);
     if (!links.length) return;
     lightBusy = true;
     DIO.lightFetchStart = Date.now();
     try {
-      // 직렬 await → 병렬. 이미 받은 시트는 캐시에서 재사용한다.
-      await Promise.all(
-        links.map(async (href) => {
-          if (cssCache.has(href)) return;
-          try {
-            cssCache.set(href, await (await fetch(href, { cache: 'force-cache' })).text());
-          } catch {
-            cssCache.set(href, '');
-          }
-        })
-      );
+      await fetchSheets(links);
       let css = '';
       let ok = 0;
       for (const href of links) {
@@ -55,21 +112,13 @@
       }
       DIO.lightMapSize = map.size;
       if (!map.size) return;
-      const scope =
-        ':root,.theme-light,.theme-dark,.theme-darker,.theme-midnight,.theme-darkest,.theme-ash';
-      let out = scope + '{';
-      for (const [k, v] of map) out += k + ':' + v + ' !important;';
-      out += '}';
-      let st = document.getElementById('dio-light-tokens');
-      if (!st) {
-        st = document.createElement('style');
-        st.id = 'dio-light-tokens';
-        document.head.appendChild(st);
-      }
-      st.textContent = out;
-      DIO.lightCssApplied = true;
+      for (const [k, v] of Object.entries(TOKEN_OVERRIDE)) map.set(k, v);
+      const out = buildLightCss(map);
+      applyLightCss(out);
       DIO.lightTokenCount = map.size;
-      cssCache.clear(); // 래치 후엔 다시 안 쓴다 — 4MB를 붙잡고 있을 이유가 없다
+      cssCache.clear(); // 래치 후엔 다시 안 쓴다 — 2.8MB를 붙잡고 있을 이유가 없다
+      // 다음 실행은 이걸 그대로 쓰면 된다 — 20초짜리 수집을 되풀이하지 않는다
+      if (window.dioBridge && window.dioBridge.saveLightCss) window.dioBridge.saveLightCss(out);
     } catch (e) {
       DIO.lastErr = 'forceLightTokens: ' + e.message;
     } finally {

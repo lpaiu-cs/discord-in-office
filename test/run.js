@@ -136,6 +136,14 @@ async function testMasking(wc) {
     'visible'
   );
   check('채널 설명 감춤', await js(wc, '__vis(".topic__9293f")'), 'hidden');
+  /* 아바타를 없애도 그 자리를 비워두는 여백이 남는다(디스코드는 아바타를
+     절대배치하고 본문에 큰 padding-left 를 준다). 클래스명을 넘겨짚지 않고
+     실측으로 찾아 지운다. */
+  check(
+    '아바타 자리 여백 제거',
+    await js(wc, 'getComputedStyle(document.getElementById("chat-messages-1-1")).paddingLeft'),
+    '0px'
+  );
 
   // 임베드 — 중첩 구조에서 가장 바깥만 접혀야 한다
   check('임베드 접힘', await js(wc, '__vis(".embedWrapper__e1")'), 'hidden');
@@ -344,6 +352,12 @@ async function testMasking(wc) {
   check('스티커 복원', await js(wc, '__vis(".stickerAsset__s2")'), 'visible');
   check('사진 복원', await js(wc, '__vis("#chat-messages-1-3 .lazyImg__i2")'), 'visible');
   check('패널 복원', await js(wc, '__vis(".guilds__a1")'), 'visible');
+  // 여백 제거는 숨김 모드 한정이다 — 보이기로 돌아오면 아바타가 다시 그 자리에 온다
+  check(
+    '보이기 모드에서는 여백 복원',
+    await js(wc, 'getComputedStyle(document.getElementById("chat-messages-1-1")).paddingLeft'),
+    '72px'
+  );
 
   // 이건 "항상 적용"이라 보이기 모드로 돌아와도 그대로 가려져 있어야 한다
   check('보이기 모드에서도 서버 이름 감춤', await js(wc, '__vis(".title_c38106")'), 'hidden');

@@ -76,8 +76,10 @@ document.querySelector('.sidebar__b2').innerHTML =
   '<div class="bannerLate__b9" style="width:100px;height:40px"></div>';
 
 const rows = document.getElementById('rows');
+// 실제 디스코드는 아바타를 절대배치하고 본문에 큰 padding-left 를 준다.
+// 아바타를 없애도 그 여백이 남는 게 이 구조 때문이다.
 const li = (id, inner) =>
-  '<li id="chat-messages-1-' + id + '" role="article">' +
+  '<li id="chat-messages-1-' + id + '" role="article" style="padding-left:72px">' +
   '<img class="avatar__h1" src="' + CDN + '/avatars/1/a.png" alt="쿠쿠">' +
   '<span class="username__y">쿠쿠</span><div class="contents__x">' + inner + '</div></li>';
 

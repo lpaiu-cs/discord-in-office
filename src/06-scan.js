@@ -201,6 +201,30 @@
     for (const f of found) watchChrome(f);
   }
 
+  /* ---------- 아바타 자리 여백 ----------
+     아바타를 없애도 그 자리를 비워두는 여백이 남는다. 디스코드는 아바타를
+     절대배치하고 본문 쪽에 큰 padding-left 를 주기 때문이다.
+     클래스 이름을 넘겨짚지 않고, 메시지 안에서 실제로 큰 왼쪽 여백을 가진
+     요소를 찾아 표시만 붙인다. 보이기/숨김 전환은 CSS 가 알아서 한다.
+
+     계산 스타일 읽기는 비싸므로 메시지당 한 번만 하고 기억해 둔다.
+     후보도 메시지 자신과 직계 자식까지만 본다 — 여백은 거기 있다. */
+  const GUTTER_MIN = 40; // 이보다 크면 아바타 자리로 본다
+  const gutterSeen = new WeakSet();
+
+  function scanGutter() {
+    for (const li of qsa(SEL.msg)) {
+      if (gutterSeen.has(li)) continue;
+      gutterSeen.add(li);
+      for (const el of [li, ...li.children]) {
+        if ((parseFloat(getComputedStyle(el).paddingLeft) || 0) >= GUTTER_MIN) {
+          el.classList.add('dio-nogutter');
+          break;
+        }
+      }
+    }
+  }
+
   /* ---------- 임베드 스캔 ----------
      유튜브·링크 미리보기는 사진과 달리 컨테이너를 통째로 접어야 한다.
      디스코드 임베드 마크업은 embedWrapper > embedFull > embedTitle... 처럼

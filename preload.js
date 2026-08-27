@@ -11,5 +11,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('dioBridge', {
   toggleEmoji: () => ipcRenderer.send('dio:toggle-emoji'),
-  togglePanels: () => ipcRenderer.send('dio:toggle-panels')
+  togglePanels: () => ipcRenderer.send('dio:toggle-panels'),
+  // 20초짜리 토큰 수집을 매번 되풀이하지 않도록 결과를 저장해 둔다
+  saveLightCss: (css) => ipcRenderer.send('dio:save-light-css', css)
 });

@@ -25,6 +25,12 @@ const saved = { emojiVisible: false };
 const cfg = { emojiVisible: false, panelsVisible: true };
 const configPath = () => path.join(app.getPath('userData'), 'config.json');
 
+/* 라이트 테마 토큰 캐시.
+   실측: 로그인 화면에서만 시트 303장(2.8MB)이고, 전부 받아 토큰을 뽑는 데
+   20.6초가 걸렸다. 그 사이 디스코드 자신의 리소스 로딩과 경쟁해서 로딩 화면이
+   중간에 멈춰 보였다. 한 번 뽑아두면 다음 실행부터는 그대로 쓰면 된다. */
+const lightCssPath = () => path.join(app.getPath('userData'), 'light-tokens.css');
+
 function loadCfg() {
   try {
     const disk = JSON.parse(fs.readFileSync(configPath(), 'utf8'));
@@ -55,6 +61,10 @@ async function injectAll() {
   // 디버그 이터레이션을 위해 매 적용 시 디스크에서 새로 읽는다
   const css = fs.readFileSync(path.join(__dirname, 'excel.css'), 'utf8');
   const js = bundle(); // src/*.js 를 순서대로 이어붙인 것
+
+  // 지난 실행에서 뽑아둔 토큰이 있으면 같이 넘긴다 — 수집을 건너뛸 수 있다
+  let lightCss = '';
+  try { lightCss = fs.readFileSync(lightCssPath(), 'utf8'); } catch {}
   try {
     await wc.insertCSS(css);
     await wc.executeJavaScript(
@@ -63,7 +73,8 @@ async function injectAll() {
           emojiVisible: cfg.emojiVisible,
           panelsVisible: cfg.panelsVisible,
           // 단축키 판정과 같은 값을 넘긴다 — 안내 문구가 실제와 어긋나지 않도록
-          isMac: process.platform === 'darwin'
+          isMac: process.platform === 'darwin',
+          lightCss
         })});`
     );
   } catch (e) {
@@ -247,6 +258,15 @@ function toggleEmoji() {
    라벨 갱신이 한 군데서만 일어난다. */
 ipcMain.on('dio:toggle-emoji', () => toggleEmoji());
 ipcMain.on('dio:toggle-panels', () => togglePanels());
+
+ipcMain.on('dio:save-light-css', (_e, css) => {
+  // 렌더러가 보내는 값이므로 형태와 크기를 확인하고 받는다
+  if (typeof css !== 'string' || !css || css.length > 2000000) return;
+  try {
+    fs.mkdirSync(path.dirname(lightCssPath()), { recursive: true });
+    fs.writeFileSync(lightCssPath(), css);
+  } catch {}
+});
 
 app.whenReady().then(() => {
   app.userAgentFallback = app.userAgentFallback.replace(/\s?Electron\/[\d.]+/, '');

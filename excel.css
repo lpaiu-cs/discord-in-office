@@ -393,3 +393,7 @@ li[id^="chat-messages"] img[data-dio-expanded="1"] {
   transform: none;
   opacity: .85;
 }
+
+/* 아바타를 없앤 자리의 여백. 어느 요소가 그 여백을 갖고 있는지는 스캔이
+   실측해서 표시를 붙이고, 여기서는 그 표시만 본다. */
+.dio-hide .dio-nogutter { padding-left: 0 !important; }
