@@ -336,10 +336,60 @@ li[id^="chat-messages"] img[data-dio-expanded="1"] {
 
 /* 상단 바 통째로. 서버 이름과 받은편지함·도움말 아이콘이 같이 들어 있어서
    이름만 빼는 것보다 바를 없애는 쪽이 위장에 낫다.
-   실측 구조가 div.title_c38106 > div.title_edbb22 라, "title_ 안에 title_ 이
-   들어 있는" 바깥 컨테이너만 :has() 로 고른다. 채널 헤더의
-   div.titleWrapper__… 는 "title_" 패턴에 걸리지 않아 여기서 제외된다. */
-[class*="title_" i]:has(> [class*="title_" i]) { display: none !important; }
+
+   예전에는 :has(> [class*="title_"]) 로 골랐는데, 양쪽 다 인덱스를 못 타는
+   부분일치라 디스코드가 노드를 쏟아내는 초기 렌더에서 스타일 무효화가 넓게
+   번졌다(시작이 눈에 띄게 느려졌다). 지금은 스캔이 이 바를 찾아 dio-topbar 를
+   붙이고 CSS 는 그 클래스만 본다 — 선택자 비용이 사라진다. */
+.dio-topbar { display: none !important; }
 
 /* 채널 헤더의 채널 이름 (실측: h1.title__해시 < div.titleWrapper__해시) */
 [class*="titleWrapper" i] h1 { display: none !important; }
+
+/* 리본의 토글 버튼 — 단축키를 모르거나 지금 눌려 있는지 알기 어려워서 둔다 */
+#dio-ribbon .dio-rbtn {
+  padding: 0 10px;
+  margin: 3px 0 3px 4px;
+  display: flex;
+  align-items: center;
+  color: #dff0e6;
+  border: 1px solid rgba(255, 255, 255, .35);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+#dio-ribbon .dio-rbtn:hover { background: rgba(255, 255, 255, .16); color: #fff; }
+/* 눌린 상태 = 가리는 중. 엑셀 리본의 토글 단추처럼 눌러진 티를 낸다 */
+#dio-ribbon .dio-rbtn.dio-pressed {
+  background: #fff;
+  color: #217346;
+  font-weight: 600;
+  border-color: #fff;
+}
+
+/* ============================================================
+   채팅 목록 안의 프로필 자리 정리
+   ============================================================ */
+
+/* 이니셜 회색 박스도 결국 자리를 차지한다. 채팅에서는 닉네임만 남기는 게 낫다.
+   멤버 목록·친구 목록에서는 누구인지 구분해야 하므로 그대로 둔다. */
+.dio-hide li[id^="chat-messages"] .dio-avatar-mask { display: none !important; }
+
+/* 아바타 자리(래퍼 포함)도 비워둘 이유가 없다.
+   우리 마스크는 위 규칙이 맡으므로 여기서는 제외한다 — 규칙끼리 겹치면
+   하나가 깨져도 다른 하나가 가려버려서 테스트가 회귀를 못 잡는다. */
+.dio-hide li[id^="chat-messages"] [class*="avatar" i]:not(.dio-avatar-mask) {
+  display: none !important;
+}
+
+/* 채널 설명(주제)도 서버 이름과 같은 성격의 노출이라 항상 감춘다 */
+[class*="topic" i] { display: none !important; }
+
+/* 펼친 뒤 남는 접기 컨트롤 — 가운데에 두면 원본을 덮으므로 모서리로 보낸다 */
+.dio-viewbtn.dio-float.dio-collapse {
+  left: auto;
+  right: 4px;
+  top: 4px;
+  transform: none;
+  opacity: .85;
+}

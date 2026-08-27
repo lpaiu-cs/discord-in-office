@@ -123,6 +123,19 @@ async function testMasking(wc) {
     'none'
   );
   check('아바타 마스크 생성', await js(wc, '__count(".dio-avatar-mask") > 0'), true);
+  /* 이니셜 박스도 결국 자리를 차지한다. 채팅에서는 닉네임만 남기는 게 낫다 —
+     멤버·친구 목록에서는 누구인지 구분해야 하므로 거기선 그대로 둔다. */
+  check(
+    '채팅 목록에서는 이니셜 박스도 안 보임',
+    await js(wc, '[...document.querySelectorAll("li[id^=chat-messages] .dio-avatar-mask")].every(m => getComputedStyle(m).display === "none")'),
+    true
+  );
+  check(
+    '사이드바 마스크는 그대로',
+    await js(wc, '__vis(".voiceUser__v .dio-avatar-mask")'),
+    'visible'
+  );
+  check('채널 설명 감춤', await js(wc, '__vis(".topic__9293f")'), 'hidden');
 
   // 임베드 — 중첩 구조에서 가장 바깥만 접혀야 한다
   check('임베드 접힘', await js(wc, '__vis(".embedWrapper__e1")'), 'hidden');
@@ -269,6 +282,49 @@ async function testMasking(wc) {
     '검색'
   );
 
+  /* 단축키만 있으면 지금 눌려 있는지 알 수 없고, 단축키를 모르면 쓰지도 못한다.
+     리본에 상태가 보이는 버튼이 있어야 한다. */
+  console.log('\n[리본] 토글 버튼');
+  check('버튼 2개 존재', await js(wc, '__count("#dio-ribbon .dio-rbtn")'), 2);
+  /* 안내 문구가 실제 단축키와 어긋나면 그대로 눌러도 아무 일이 없다.
+     맥은 메인 프로세스가 Cmd(input.meta)로 판정하므로 안내도 그래야 한다. */
+  check(
+    '윈도우 안내는 Ctrl',
+    await js(wc, 'document.querySelectorAll("#dio-ribbon .dio-rbtn")[0].title.includes("Ctrl+E")'),
+    true
+  );
+  check(
+    '가리는 중이면 눌린 표시',
+    await js(wc, 'document.querySelectorAll("#dio-ribbon .dio-rbtn")[0].classList.contains("dio-pressed")'),
+    true
+  );
+  check(
+    '패널이 펴져 있으면 안 눌린 표시',
+    await js(wc, 'document.querySelectorAll("#dio-ribbon .dio-rbtn")[1].classList.contains("dio-pressed")'),
+    false
+  );
+  // 브리지가 없는 픽스처에서는 로컬 토글로 떨어진다 — 화면은 바뀌어야 한다
+  await js(wc, 'document.querySelectorAll("#dio-ribbon .dio-rbtn")[1].click()');
+  await wait(400);
+  check('패널 버튼 클릭이 먹음', await js(wc, '__vis(".guilds__a1")'), 'hidden');
+  check(
+    '클릭 후 눌린 표시로 바뀜',
+    await js(wc, 'document.querySelectorAll("#dio-ribbon .dio-rbtn")[1].classList.contains("dio-pressed")'),
+    true
+  );
+  await js(wc, 'document.querySelectorAll("#dio-ribbon .dio-rbtn")[1].click()');
+  await wait(400);
+  check('다시 눌러 원복', await js(wc, '__vis(".guilds__a1")'), 'visible');
+
+  // 맥으로 부팅하면 같은 버튼이 Cmd 로 안내해야 한다
+  await boot(wc, 'masking.html', { emojiVisible: false, panelsVisible: true, isMac: true });
+  const titles = await js(
+    wc,
+    '[...document.querySelectorAll("#dio-ribbon .dio-rbtn")].map(b => b.title).join(" | ")'
+  );
+  check('맥 안내는 Cmd 기호', titles.indexOf('⌘E') > -1 && titles.indexOf('⌘⇧B') > -1, true);
+  check('맥 안내에 Ctrl 없음', titles.indexOf('Ctrl') === -1, true);
+
   console.log('\n[가림] 패널 접기');
   await js(wc, 'window.__dioSetPanels(false)');
   await wait(300);
@@ -337,6 +393,24 @@ async function testExpand(wc) {
   await js(wc, 'document.querySelector("#chat-messages-1-3 .dio-viewbtn").click()');
   await wait(500);
   check('사진 펼쳐짐', await js(wc, '__vis("#chat-messages-1-3 .lazyImg__i2")'), 'visible');
+  /* 펼친 사진을 다시 눌러도 접히지만 그걸 알 방법이 없다.
+     임베드처럼 보이는 접기 컨트롤이 남아야 한다. */
+  check(
+    '펼친 뒤 접기 버튼이 보임',
+    await js(wc, '__vis("#chat-messages-1-3 .dio-viewbtn")'),
+    'visible'
+  );
+  check(
+    '접기 버튼 문구',
+    await js(wc, 'document.querySelector("#chat-messages-1-3 .dio-viewbtn").textContent.trim()'),
+    '사진 접기'
+  );
+  await js(wc, 'document.querySelector("#chat-messages-1-3 .dio-viewbtn").click()');
+  await wait(500);
+  check('접기 버튼으로 접힘', await js(wc, '__vis("#chat-messages-1-3 .lazyImg__i2")'), 'hidden');
+  await js(wc, 'document.querySelector("#chat-messages-1-3 .dio-viewbtn").click()');
+  await wait(500);
+  check('다시 펼침', await js(wc, '__vis("#chat-messages-1-3 .lazyImg__i2")'), 'visible');
 
   await js(wc, 'document.querySelector(".carousel__c1 .dio-viewbtn").click()');
   await wait(500);

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, shell } = require('electron');
+const { app, BrowserWindow, Menu, ipcMain, shell } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -18,13 +18,19 @@ let injected = false;
 // 합쳐 두면 --dio-visible 로 띄운 뒤 패널만 토글해도 saveCfg 가 cfg 전체를 쓰면서
 // emojiVisible: true 까지 저장돼, 다음 npm start 가 안 가려진 채 뜬다.
 // 일회성 플래그가 안전한 기본값을 밀어내면 안 된다.
-const saved = { emojiVisible: false, panelsVisible: true };
-const cfg = { ...saved };
+/* panelsVisible 은 일부러 저장하지 않는다. 접어둔 채로 껐다가 다시 켜면 지금
+   어느 채널인지 알 수 없는 화면으로 시작해서 혼란스럽다. 매번 펼친 채로
+   시작하고, 접는 건 그 세션 동안만 유지한다. */
+const saved = { emojiVisible: false };
+const cfg = { emojiVisible: false, panelsVisible: true };
 const configPath = () => path.join(app.getPath('userData'), 'config.json');
 
 function loadCfg() {
-  try { Object.assign(saved, JSON.parse(fs.readFileSync(configPath(), 'utf8'))); } catch {}
-  Object.assign(cfg, saved);
+  try {
+    const disk = JSON.parse(fs.readFileSync(configPath(), 'utf8'));
+    if (typeof disk.emojiVisible === 'boolean') saved.emojiVisible = disk.emojiVisible;
+  } catch {}
+  cfg.emojiVisible = saved.emojiVisible; // 패널은 항상 펼친 기본값으로 남는다
 }
 // CLI 플래그는 이번 실행에만 적용하고 저장하지 않는다.
 // npm run start:hidden 을 한 번 썼다고 이후 npm start 가 숨김으로 남으면 곤란하다.
@@ -55,7 +61,9 @@ async function injectAll() {
       js +
         `;__DIO_BOOT(${JSON.stringify({
           emojiVisible: cfg.emojiVisible,
-          panelsVisible: cfg.panelsVisible
+          panelsVisible: cfg.panelsVisible,
+          // 단축키 판정과 같은 값을 넘긴다 — 안내 문구가 실제와 어긋나지 않도록
+          isMac: process.platform === 'darwin'
         })});`
     );
   } catch (e) {
@@ -115,7 +123,9 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
-      spellcheck: false
+      spellcheck: false,
+      // 리본 버튼이 메인 프로세스로 토글을 보내는 통로
+      preload: path.join(__dirname, 'preload.js')
     }
   });
 
@@ -216,9 +226,8 @@ function buildMenu() {
 }
 
 function togglePanels() {
-  // 사용자가 실제로 바꾼 항목만 디스크에 반영한다
-  cfg.panelsVisible = saved.panelsVisible = !cfg.panelsVisible;
-  saveCfg();
+  // 이 세션 동안만 유지한다 — 저장하지 않으므로 다음 실행은 다시 펼친 상태다
+  cfg.panelsVisible = !cfg.panelsVisible;
   if (win) {
     win.webContents.executeJavaScript(`window.__dioSetPanels(${cfg.panelsVisible})`).catch(() => {});
   }
@@ -233,6 +242,11 @@ function toggleEmoji() {
   }
   Menu.setApplicationMenu(buildMenu());
 }
+
+/* 리본 버튼도 단축키·메뉴와 같은 경로로 모은다 — 그래야 설정 저장과 메뉴
+   라벨 갱신이 한 군데서만 일어난다. */
+ipcMain.on('dio:toggle-emoji', () => toggleEmoji());
+ipcMain.on('dio:toggle-panels', () => togglePanels());
 
 app.whenReady().then(() => {
   app.userAgentFallback = app.userAgentFallback.replace(/\s?Electron\/[\d.]+/, '');

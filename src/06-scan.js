@@ -157,7 +157,24 @@
     chromeMo.observe(w.root, CHROME_OBSERVE);
   }
 
+  /* 상단 바 찾기 — CSS 의 :has() 를 대신한다.
+     실측 구조가 div.title_c38106 > div.title_edbb22 이므로, "title_" 안에
+     "title_" 이 바로 들어 있는 바깥 컨테이너가 그 바다. 한 번 찾으면 붙잡고
+     있다가 떨어져 나갔을 때만 다시 찾는다. */
+  let topBar = null;
+  function tagTopBar() {
+    if (topBar && topBar.isConnected) {
+      // React 가 class 를 다시 쓰면 우리 표시가 지워진다
+      if (!topBar.classList.contains('dio-topbar')) topBar.classList.add('dio-topbar');
+      return;
+    }
+    const inner = document.querySelector('[class*="title_" i] > [class*="title_" i]');
+    topBar = inner && inner.parentElement;
+    if (topBar) topBar.classList.add('dio-topbar');
+  }
+
   function scanChromeText() {
+    tagTopBar();
     const found = [];
     for (const spec of CHROME_TEXT) {
       for (const root of qsa(spec.root)) {
@@ -263,6 +280,10 @@
       // 아바타 마스크와 같은 함정 — 이 값을 빼면 버튼이 0x0 으로 남는다.
       labelShow: 'flex',
       collapseBack: true,
+      /* 펼친 사진을 다시 누르면 접히지만, 그걸 알 방법이 없다.
+         임베드처럼 접기 컨트롤을 눈에 보이게 남긴다. */
+      keepLabel: true,
+      collapseText: '사진 접기',
       text: () => '눌러서 사진보기',
       onCreate: (btn, img) => {
         btn.setAttribute('role', 'button');
