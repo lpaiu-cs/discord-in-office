@@ -128,6 +128,8 @@
       setDisplay(node, show);
       const labVal = show && !keep ? 'none' : spec.labelShow || 'inline';
       if (lab.style.display !== labVal) lab.style.display = labVal;
+      // 펼친 상태의 컨트롤은 원본을 덮지 않게 CSS 가 자리를 옮긴다
+      lab.classList.toggle('dio-collapse', !!keep);
 
       // excel.css 의 cursor:zoom-out 규칙이 이 속성을 본다.
       // 상태의 근거는 위 Set 이고, 이건 표시용 미러일 뿐이다.

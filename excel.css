@@ -366,3 +366,30 @@ li[id^="chat-messages"] img[data-dio-expanded="1"] {
   font-weight: 600;
   border-color: #fff;
 }
+
+/* ============================================================
+   채팅 목록 안의 프로필 자리 정리
+   ============================================================ */
+
+/* 이니셜 회색 박스도 결국 자리를 차지한다. 채팅에서는 닉네임만 남기는 게 낫다.
+   멤버 목록·친구 목록에서는 누구인지 구분해야 하므로 그대로 둔다. */
+.dio-hide li[id^="chat-messages"] .dio-avatar-mask { display: none !important; }
+
+/* 아바타 자리(래퍼 포함)도 비워둘 이유가 없다.
+   우리 마스크는 위 규칙이 맡으므로 여기서는 제외한다 — 규칙끼리 겹치면
+   하나가 깨져도 다른 하나가 가려버려서 테스트가 회귀를 못 잡는다. */
+.dio-hide li[id^="chat-messages"] [class*="avatar" i]:not(.dio-avatar-mask) {
+  display: none !important;
+}
+
+/* 채널 설명(주제)도 서버 이름과 같은 성격의 노출이라 항상 감춘다 */
+[class*="topic" i] { display: none !important; }
+
+/* 펼친 뒤 남는 접기 컨트롤 — 가운데에 두면 원본을 덮으므로 모서리로 보낸다 */
+.dio-viewbtn.dio-float.dio-collapse {
+  left: auto;
+  right: 4px;
+  top: 4px;
+  transform: none;
+  opacity: .85;
+}

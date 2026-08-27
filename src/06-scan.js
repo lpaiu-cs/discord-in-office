@@ -280,6 +280,10 @@
       // 아바타 마스크와 같은 함정 — 이 값을 빼면 버튼이 0x0 으로 남는다.
       labelShow: 'flex',
       collapseBack: true,
+      /* 펼친 사진을 다시 누르면 접히지만, 그걸 알 방법이 없다.
+         임베드처럼 접기 컨트롤을 눈에 보이게 남긴다. */
+      keepLabel: true,
+      collapseText: '사진 접기',
       text: () => '눌러서 사진보기',
       onCreate: (btn, img) => {
         btn.setAttribute('role', 'button');
