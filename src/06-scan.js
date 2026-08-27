@@ -64,6 +64,126 @@
     });
   }
 
+  /* ---------- 크롬 텍스트 위장 ----------
+     서버·채널 이름은 "이건 엑셀이 아니다"를 가장 크게 알리는 요소다.
+     **숨김 모드와 무관하게 항상** 적용한다 — 채널이 어디인지는 좌측 패널을
+     펴면(Ctrl+Shift+B) 확인할 수 있으니 길을 잃지 않는다.
+
+     감추기만 하면 되는 것(상단 바·채널 헤더)은 excel.css 가 처리한다.
+     여기서는 **문구를 갈아끼워야 하는** 두 곳만 다룬다 — CSS 로는 텍스트를
+     바꿀 수 없기 때문이다. */
+  const CHROME_TEXT = [
+    {
+      /* "search__해시" 만 잡는다.
+         [class*="search"] 로 넓게 잡으면 검색 결과 패널(searchResultsWrap__해시
+         등)까지 들어오고, 거기 있는 실제 메시지가 우연히 "…검색" 으로 끝나면
+         대화 내용을 안내문으로 오인해 덮어쓴다.
+         디스코드 클래스는 <모듈명>__<해시> 꼴이라 "search" 바로 뒤에 "__" 가
+         오는 것만이 검색창 본체다. 결과 패널은 searchResults… 처럼 이어져서
+         이 패턴에 걸리지 않는다. */
+      root: '[class*="search__" i]',
+      want: '검색',
+      match: /검색$|^search\b/i
+    },
+    {
+      root: '[class*="channelTextArea" i]',
+      pick: '[class*="placeholder" i]',
+      want: '값을 입력하십시오',
+      match: /메시지 보내기|^message\s/i
+    }
+  ];
+
+  /* 이 안쪽은 이모지 래핑 대상에서 뺀다. 문구를 통째로 갈아끼우는 자리라
+     .dio-emoji-text 스팬이 끼면, 그 스팬을 되살리는 쪽과 문구를 덮는 쪽이
+     서로 밀어내며 DOM 을 계속 건드린다. */
+  const CHROME_ROOTS = CHROME_TEXT.map((s) => s.root).join(', ');
+
+  /* 안내문 길이 상한 — 대화 한 덩어리가 통째로 들어오는 걸 막는 안전장치다.
+     오인 방지의 본체는 이게 아니라 구조 선택자(search__ / placeholder)다.
+
+     디스코드는 서버·채널 이름을 **100자까지** 허용한다. 여기에 고정 문구가
+     붙으므로 실제로 나올 수 있는 최대치는:
+       "<서버명 100자> 검색"            → 103
+       "#<채널명 100자>에 메시지 보내기" → 110
+       "Message #<채널명 100자>"        → 109
+     처음에 60으로 잡았더니 긴 이름에서 그대로 노출됐다. 다른 로케일의 고정
+     문구가 더 길 수 있어 여유를 둔다. */
+  const CHROME_MAX = 160;
+
+  function applyChromeText(root, spec) {
+    if (!root || !root.isConnected) return;
+    const box = spec.pick ? root.querySelector(spec.pick) : root;
+    if (!box || box.closest('input, textarea, [contenteditable="true"]')) return;
+
+    /* 상자의 텍스트 **전체**가 곧 그 안내문이어야 한다.
+       조각 하나만 보고 판단하면 대화 내용을 안내문으로 오인한다 — 결과 패널의
+       마지막 메시지가 "자료 검색" 이면 그걸 "검색" 으로 덮어쓰게 된다. */
+    const whole = box.textContent.trim();
+    if (whole === spec.want) return;
+    if (whole.length > CHROME_MAX || !spec.match.test(whole)) return;
+
+    /* 텍스트 노드만 갈아끼운다. box.textContent 에 통째로 대입하면 돋보기
+       아이콘 같은 자식 요소가 날아가고 디스코드 쪽 핸들러까지 같이 사라진다.
+       매번 다시 훑는다 — React 가 안쪽을 갈아끼워도 따라가야 한다. */
+    const walk = document.createTreeWalker(box, NodeFilter.SHOW_TEXT);
+    const texts = [];
+    while (walk.nextNode()) {
+      if (walk.currentNode.textContent.trim()) texts.push(walk.currentNode);
+    }
+    if (!texts.length) return;
+    texts[0].nodeValue = spec.want;
+    for (let i = 1; i < texts.length; i++) texts[i].nodeValue = '';
+  }
+
+  /* 스캔 스케줄러는 childList 만 관측하고, 증분 스캔은 변이가 난 서브트리만
+     훑는다. 그래서 둘 다로는 이 문구를 지키지 못한다:
+       - React 가 텍스트 노드의 nodeValue 만 바꾸면 addedNodes 가 없어 스캔이
+         예약되지 않는다.
+       - 안쪽 span 만 교체되면 증분 스캔의 루트는 그 span 이라, 조상인 검색
+         컨테이너까지 올라가지 않아 대상을 찾지 못한다.
+     둘 다 4초 백업 스캔까지 서버 이름이 그대로 보인다는 뜻이다.
+
+     그래서 **클래스가 안정적인 컨테이너**(검색창·입력창)에 좁게 관측을 건다.
+     leaf 요소에 걸면 교체되는 순간 분리된 옛 노드만 보게 된다.
+     문서 전역에 characterData 를 걸면 메시지마다 콜백이 터지므로 하지 않는다. */
+  const CHROME_OBSERVE = { characterData: true, childList: true, subtree: true };
+  let chromeWatch = [];
+  const chromeMo = new MutationObserver(() => {
+    for (const w of chromeWatch) applyChromeText(w.root, w.spec);
+  });
+
+  function watchChrome(w) {
+    chromeWatch.push(w);
+    chromeMo.observe(w.root, CHROME_OBSERVE);
+  }
+
+  function scanChromeText() {
+    const found = [];
+    for (const spec of CHROME_TEXT) {
+      for (const root of qsa(spec.root)) {
+        applyChromeText(root, spec);
+        found.push({ root, spec });
+      }
+    }
+
+    if (roots) {
+      /* 증분 스캔에서는 목록을 갈아치우지 않는다 — 컨테이너를 못 찾는 경우가
+         많아 그걸로 덮으면 관측이 끊긴다. 대신 새로 나타난 컨테이너만 더한다.
+         떨어져 나간 것은 아래 전체 스캔이 정리한다(최대 4초). */
+      for (const f of found) {
+        if (!chromeWatch.some((w) => w.root === f.root)) watchChrome(f);
+      }
+      return;
+    }
+
+    const same =
+      found.length === chromeWatch.length && found.every((f, i) => f.root === chromeWatch[i].root);
+    if (same) return;
+    chromeMo.disconnect();
+    chromeWatch = [];
+    for (const f of found) watchChrome(f);
+  }
+
   /* ---------- 임베드 스캔 ----------
      유튜브·링크 미리보기는 사진과 달리 컨테이너를 통째로 접어야 한다.
      디스코드 임베드 마크업은 embedWrapper > embedFull > embedTitle... 처럼
@@ -282,6 +402,8 @@
     }
     // 기존 스팬 토글
     for (const s of qsa('.dio-emoji-text')) {
+      // 크롬 안에 남아 있으면 문구 치환과 계속 부딪힌다
+      if (s.closest(CHROME_ROOTS)) { s.replaceWith(s.dataset.orig || ''); continue; }
       const orig = s.dataset.orig || '';
       const want = DIO.visible ? orig : describe(orig);
       if (s.textContent !== want) s.textContent = want;
@@ -298,6 +420,8 @@
         if (!p) return NodeFilter.FILTER_REJECT;
         if (p.closest('input, textarea, [contenteditable], script, style')) return NodeFilter.FILTER_REJECT;
         if (p.closest('.dio-emoji-text, [id^="dio-"]')) return NodeFilter.FILTER_REJECT;
+        // 문구를 통째로 갈아끼우는 자리 — 여기 스팬을 심으면 서로 밀어낸다
+        if (p.closest(CHROME_ROOTS)) return NodeFilter.FILTER_REJECT;
         return EMOJI_RE.test(n.textContent) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
       }
     });

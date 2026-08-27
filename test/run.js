@@ -171,6 +171,104 @@ async function testMasking(wc) {
   await wait(400);
   check('나중에 붙은 배너도 가려짐', await js(wc, '__vis(".bannerLate__b9")'), 'hidden');
 
+  /* 서버·채널 이름은 모드와 무관하게 항상 가려야 한다.
+     여기(숨김 모드)와 아래 '보이기 복원' 양쪽에서 확인한다. */
+  console.log('\n[크롬] 서버·채널 이름');
+  check('상단 바(서버 이름) 감춤', await js(wc, '__vis(".title_c38106")'), 'hidden');
+  check('채널 이름 감춤', await js(wc, '__vis(".title__9293f")'), 'hidden');
+  check(
+    '검색 문구에서 서버 이름 제거',
+    await js(wc, 'document.querySelector(".search__49676").textContent.trim()'),
+    '검색'
+  );
+  check(
+    '입력 안내문에서 채널 이름 제거',
+    await js(wc, 'document.querySelector(".placeholder__1b31f").textContent.trim()'),
+    '값을 입력하십시오'
+  );
+  /* 검색 결과 패널도 클래스에 search 가 들어간다. 그 안의 실제 메시지가 우연히
+     "…검색" 으로 끝난다고 안내문으로 오인해 덮어쓰면 대화 내용이 사라진다. */
+  check(
+    '검색 결과의 실제 메시지는 건드리지 않음',
+    await js(wc, 'document.querySelector(".messageContent__r2").textContent.trim()'),
+    '자료 검색'
+  );
+  check(
+    '결과가 하나뿐인 패널도 건드리지 않음',
+    await js(wc, 'document.querySelector(".messageContent__r5").textContent.trim()'),
+    '회의록 검색'
+  );
+
+  /* 디스코드 서버·채널 이름은 100자까지 만들 수 있다. 안내문 길이에 임의의
+     상한을 두면 그런 이름에서 그대로 노출된다 — 이름을 항상 가린다는 계약이
+     현실적인 입력에서 깨지는 것이라 반드시 확인한다. */
+  await js(
+    wc,
+    [
+      'const long = "가".repeat(100);',
+      'document.querySelector(".search__49676 span span").textContent = long + " 검색";',
+      'document.querySelector(".placeholder__1b31f").textContent =',
+      '  "#" + "나".repeat(100) + "에 메시지 보내기";',
+      'true;'
+    ].join('\n')
+  );
+  await wait(600);
+  check(
+    '100자 서버 이름도 가려짐',
+    await js(wc, 'document.querySelector(".search__49676").textContent.trim()'),
+    '검색'
+  );
+  check(
+    '100자 채널 이름도 가려짐',
+    await js(wc, 'document.querySelector(".placeholder__1b31f").textContent.trim()'),
+    '값을 입력하십시오'
+  );
+  check(
+    '검색창 아이콘은 남아 있음',
+    await js(wc, '!!document.querySelector(".search__49676 svg")'),
+    true
+  );
+
+  /* React 는 서버·채널을 옮길 때 텍스트 노드를 그대로 둔 채 nodeValue 만
+     갈아끼우기도 한다. 그건 characterData 변이라 addedNodes 가 없어서
+     childList 만 보는 스케줄러는 스캔을 예약하지 않는다. 4초 백업 스캔이
+     돌기 전까지 서버 이름이 그대로 보이면 "항상 가린다" 는 계약이 깨진다.
+     아래 대기 시간은 백업 주기(4초)보다 한참 짧게 잡았다. */
+  await js(
+    wc,
+    [
+      'const s = [...document.querySelectorAll(".search__49676 *")]',
+      '  .find(e => [...e.childNodes].some(n => n.nodeType === 3 && n.textContent.trim()));',
+      's.firstChild.nodeValue = "다른서버 검색";',
+      'true;'
+    ].join('\n')
+  );
+  await wait(500);
+  check(
+    '텍스트 노드만 갱신돼도 즉시 다시 가림',
+    await js(wc, 'document.querySelector(".search__49676").textContent.trim()'),
+    '검색'
+  );
+
+  /* React 는 텍스트만 바꾸는 게 아니라 안쪽 요소를 통째로 갈아끼우기도 한다.
+     관측을 leaf 요소에 걸어 두면 그 순간 분리된 옛 노드만 계속 보게 되고,
+     증분 스캔은 조상 컨테이너까지 올라가지 않아 새 요소를 찾지 못한다.
+     그래서 관측은 클래스가 안정적인 컨테이너에 걸어야 한다. */
+  await js(
+    wc,
+    [
+      'const box = document.querySelector(".search__49676 > div");',
+      'box.innerHTML = "<span><span>다른서버 검색</span></span>";',
+      'true;'
+    ].join('\n')
+  );
+  await wait(500);
+  check(
+    '안쪽 요소가 통째로 교체돼도 즉시 다시 가림',
+    await js(wc, 'document.querySelector(".search__49676").textContent.trim()'),
+    '검색'
+  );
+
   console.log('\n[가림] 패널 접기');
   await js(wc, 'window.__dioSetPanels(false)');
   await wait(300);
@@ -190,6 +288,20 @@ async function testMasking(wc) {
   check('스티커 복원', await js(wc, '__vis(".stickerAsset__s2")'), 'visible');
   check('사진 복원', await js(wc, '__vis("#chat-messages-1-3 .lazyImg__i2")'), 'visible');
   check('패널 복원', await js(wc, '__vis(".guilds__a1")'), 'visible');
+
+  // 이건 "항상 적용"이라 보이기 모드로 돌아와도 그대로 가려져 있어야 한다
+  check('보이기 모드에서도 서버 이름 감춤', await js(wc, '__vis(".title_c38106")'), 'hidden');
+  check('보이기 모드에서도 채널 이름 감춤', await js(wc, '__vis(".title__9293f")'), 'hidden');
+  check(
+    '보이기 모드에서도 검색 문구 유지',
+    await js(wc, 'document.querySelector(".search__49676").textContent.trim()'),
+    '검색'
+  );
+  check(
+    '보이기 모드에서도 입력 안내문 유지',
+    await js(wc, 'document.querySelector(".placeholder__1b31f").textContent.trim()'),
+    '값을 입력하십시오'
+  );
 }
 
 /* ---------------- 펼치기 토글 ---------------- */

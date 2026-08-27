@@ -11,23 +11,34 @@ const SPOOF_TITLE = '재고관리_2026.xlsx - Excel';
 let win = null;
 let injected = false;
 
-const cfg = { emojiVisible: true, panelsVisible: true };
+// 기본은 가린 상태다. 위장이 목적인 도구라 안 가려진 채로 뜨면 앞뒤가 안 맞는다.
+// 잠깐 원본을 보려면 Ctrl+E, 항상 보이게 두려면 npm run start:visible.
+//
+// saved 는 디스크에 있는 값, cfg 는 이번 실행에 실제로 쓰는 값이다. 둘을 하나로
+// 합쳐 두면 --dio-visible 로 띄운 뒤 패널만 토글해도 saveCfg 가 cfg 전체를 쓰면서
+// emojiVisible: true 까지 저장돼, 다음 npm start 가 안 가려진 채 뜬다.
+// 일회성 플래그가 안전한 기본값을 밀어내면 안 된다.
+const saved = { emojiVisible: false, panelsVisible: true };
+const cfg = { ...saved };
 const configPath = () => path.join(app.getPath('userData'), 'config.json');
 
 function loadCfg() {
-  try { Object.assign(cfg, JSON.parse(fs.readFileSync(configPath(), 'utf8'))); } catch {}
+  try { Object.assign(saved, JSON.parse(fs.readFileSync(configPath(), 'utf8'))); } catch {}
+  Object.assign(cfg, saved);
 }
 // CLI 플래그는 이번 실행에만 적용하고 저장하지 않는다.
 // npm run start:hidden 을 한 번 썼다고 이후 npm start 가 숨김으로 남으면 곤란하다.
 function applyCliFlags() {
+  // cfg 만 건드린다 — saved 를 건드리면 디스크로 새어 나간다
   if (process.argv.includes('--dio-hidden')) cfg.emojiVisible = false;
+  if (process.argv.includes('--dio-visible')) cfg.emojiVisible = true;
   if (process.argv.includes('--dio-nopanel')) cfg.panelsVisible = false;
 }
 
 function saveCfg() {
   try {
     fs.mkdirSync(path.dirname(configPath()), { recursive: true });
-    fs.writeFileSync(configPath(), JSON.stringify(cfg, null, 2));
+    fs.writeFileSync(configPath(), JSON.stringify(saved, null, 2));
   } catch {}
 }
 
@@ -205,7 +216,8 @@ function buildMenu() {
 }
 
 function togglePanels() {
-  cfg.panelsVisible = !cfg.panelsVisible;
+  // 사용자가 실제로 바꾼 항목만 디스크에 반영한다
+  cfg.panelsVisible = saved.panelsVisible = !cfg.panelsVisible;
   saveCfg();
   if (win) {
     win.webContents.executeJavaScript(`window.__dioSetPanels(${cfg.panelsVisible})`).catch(() => {});
@@ -214,7 +226,7 @@ function togglePanels() {
 }
 
 function toggleEmoji() {
-  cfg.emojiVisible = !cfg.emojiVisible;
+  cfg.emojiVisible = saved.emojiVisible = !cfg.emojiVisible;
   saveCfg();
   if (win) {
     win.webContents.executeJavaScript(`window.__dioSetEmoji(${cfg.emojiVisible})`).catch(() => {});

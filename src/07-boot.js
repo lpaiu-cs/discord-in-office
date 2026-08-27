@@ -12,7 +12,7 @@
     try {
       enforceLightTheme();
       void forceLightTokens(); // 성공 후에는 boolean 체크 한 번으로 끝난다
-      for (const pass of [scanEmojis, scanStickers, scanEmbeds, scanPhotos, scanAvatars, scanBgAvatars, scanDecor, scanTextEmojis]) {
+      for (const pass of [scanChromeText, scanEmojis, scanStickers, scanEmbeds, scanPhotos, scanAvatars, scanBgAvatars, scanDecor, scanTextEmojis]) {
         try {
           pass();
         } catch (e) {
