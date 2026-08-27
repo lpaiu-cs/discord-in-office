@@ -208,6 +208,25 @@ async function testMasking(wc) {
     '검색'
   );
 
+  /* React 는 텍스트만 바꾸는 게 아니라 안쪽 요소를 통째로 갈아끼우기도 한다.
+     관측을 leaf 요소에 걸어 두면 그 순간 분리된 옛 노드만 계속 보게 되고,
+     증분 스캔은 조상 컨테이너까지 올라가지 않아 새 요소를 찾지 못한다.
+     그래서 관측은 클래스가 안정적인 컨테이너에 걸어야 한다. */
+  await js(
+    wc,
+    [
+      'const box = document.querySelector(".search__49676 > div");',
+      'box.innerHTML = "<span><span>다른서버 검색</span></span>";',
+      'true;'
+    ].join('\n')
+  );
+  await wait(500);
+  check(
+    '안쪽 요소가 통째로 교체돼도 즉시 다시 가림',
+    await js(wc, 'document.querySelector(".search__49676").textContent.trim()'),
+    '검색'
+  );
+
   console.log('\n[가림] 패널 접기');
   await js(wc, 'window.__dioSetPanels(false)');
   await wait(300);

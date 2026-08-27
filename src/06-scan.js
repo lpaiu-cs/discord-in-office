@@ -88,57 +88,71 @@
     }
   ];
 
-  function applyChromeText(el, spec) {
-    if (!el || !el.isConnected) return;
+  /* 글자를 실제로 들고 있는 가장 안쪽 요소를 고른다 — 검색창은 span 이 세 겹
+     중첩돼 있고 문구는 맨 안쪽에 있다. 직접 텍스트 노드가 있는 것만 고르므로
+     <input> 은 애초에 후보가 아니다(값을 건드릴 일이 없다).
+     매번 다시 찾는다 — React 가 안쪽 요소를 갈아끼워도 따라가야 한다. */
+  function applyChromeText(root, spec) {
+    if (!root || !root.isConnected) return;
+    const box = spec.pick ? root.querySelector(spec.pick) : root;
+    if (!box) return;
+    const owners = [box, ...box.querySelectorAll('*')].filter((e) =>
+      [...e.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim())
+    );
+    const el = owners[owners.length - 1];
+    if (!el || el.closest('input, textarea, [contenteditable="true"]')) return;
     const cur = el.textContent.trim();
     if (cur === spec.want || !spec.match.test(cur)) return;
     el.textContent = spec.want;
   }
 
-  /* 스캔 스케줄러는 childList 만 관측한다. 그런데 React 는 서버·채널을 옮길 때
-     placeholder 의 텍스트 노드를 그대로 둔 채 nodeValue 만 갈아끼우기도 한다.
-     그건 characterData 변이라 addedNodes 가 없어 스캔이 예약되지 않고, 4초 백업
-     스캔이 돌 때까지 서버 이름이 그대로 보인다 — "항상 가린다" 가 계약인
-     기능에서 4초는 너무 길다.
-     문서 전역에 characterData 를 걸면 메시지마다 콜백이 터지므로, 우리가 실제로
-     문구를 바꾼 요소 두어 개에만 좁게 붙인다. */
+  /* 스캔 스케줄러는 childList 만 관측하고, 증분 스캔은 변이가 난 서브트리만
+     훑는다. 그래서 둘 다로는 이 문구를 지키지 못한다:
+       - React 가 텍스트 노드의 nodeValue 만 바꾸면 addedNodes 가 없어 스캔이
+         예약되지 않는다.
+       - 안쪽 span 만 교체되면 증분 스캔의 루트는 그 span 이라, 조상인 검색
+         컨테이너까지 올라가지 않아 대상을 찾지 못한다.
+     둘 다 4초 백업 스캔까지 서버 이름이 그대로 보인다는 뜻이다.
+
+     그래서 **클래스가 안정적인 컨테이너**(검색창·입력창)에 좁게 관측을 건다.
+     leaf 요소에 걸면 교체되는 순간 분리된 옛 노드만 보게 된다.
+     문서 전역에 characterData 를 걸면 메시지마다 콜백이 터지므로 하지 않는다. */
+  const CHROME_OBSERVE = { characterData: true, childList: true, subtree: true };
   let chromeWatch = [];
   const chromeMo = new MutationObserver(() => {
-    for (const w of chromeWatch) applyChromeText(w.el, w.spec);
+    for (const w of chromeWatch) applyChromeText(w.root, w.spec);
   });
+
+  function watchChrome(w) {
+    chromeWatch.push(w);
+    chromeMo.observe(w.root, CHROME_OBSERVE);
+  }
 
   function scanChromeText() {
     const found = [];
     for (const spec of CHROME_TEXT) {
       for (const root of qsa(spec.root)) {
-        const box = spec.pick ? root.querySelector(spec.pick) : root;
-        if (!box) continue;
-
-        /* 글자를 실제로 들고 있는 가장 안쪽 요소를 고른다 — 검색창은 span 이
-           세 겹 중첩돼 있고 문구는 맨 안쪽에 있다. 직접 텍스트 노드가 있는
-           것만 고르므로 <input> 은 애초에 후보가 아니다(값을 건드릴 일이 없다). */
-        const owners = [box, ...box.querySelectorAll('*')].filter((e) =>
-          [...e.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim())
-        );
-        const el = owners[owners.length - 1];
-        if (!el || el.closest('input, textarea, [contenteditable="true"]')) continue;
-
-        applyChromeText(el, spec);
-        found.push({ el, spec });
+        applyChromeText(root, spec);
+        found.push({ root, spec });
       }
     }
 
-    /* 관측 대상 갱신은 전체 스캔에서만 한다. 증분 스캔은 이 컨테이너들을 훑지
-       않아 found 가 비어 있을 수 있는데, 그걸로 다시 걸면 관측이 끊긴다. */
-    if (roots) return;
+    if (roots) {
+      /* 증분 스캔에서는 목록을 갈아치우지 않는다 — 컨테이너를 못 찾는 경우가
+         많아 그걸로 덮으면 관측이 끊긴다. 대신 새로 나타난 컨테이너만 더한다.
+         떨어져 나간 것은 아래 전체 스캔이 정리한다(최대 4초). */
+      for (const f of found) {
+        if (!chromeWatch.some((w) => w.root === f.root)) watchChrome(f);
+      }
+      return;
+    }
+
     const same =
-      found.length === chromeWatch.length && found.every((f, i) => f.el === chromeWatch[i].el);
+      found.length === chromeWatch.length && found.every((f, i) => f.root === chromeWatch[i].root);
     if (same) return;
     chromeMo.disconnect();
-    chromeWatch = found;
-    for (const w of found) {
-      chromeMo.observe(w.el, { characterData: true, childList: true, subtree: true });
-    }
+    chromeWatch = [];
+    for (const f of found) watchChrome(f);
   }
 
   /* ---------- 임베드 스캔 ----------
