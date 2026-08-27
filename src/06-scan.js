@@ -64,6 +64,52 @@
     });
   }
 
+  /* ---------- 크롬 텍스트 위장 ----------
+     서버·채널 이름은 "이건 엑셀이 아니다"를 가장 크게 알리는 요소다.
+     **숨김 모드와 무관하게 항상** 적용한다 — 채널이 어디인지는 좌측 패널을
+     펴면(Ctrl+Shift+B) 확인할 수 있으니 길을 잃지 않는다.
+
+     감추기만 하면 되는 것(상단 바·채널 헤더)은 excel.css 가 처리한다.
+     여기서는 **문구를 갈아끼워야 하는** 두 곳만 다룬다 — CSS 로는 텍스트를
+     바꿀 수 없기 때문이다. */
+  const CHROME_TEXT = [
+    {
+      root: '[class*="search" i]',
+      want: '검색',
+      /* [class*="search"] 는 검색 결과 패널 같은 것도 잡는다. 실수로 결과
+         텍스트를 덮어쓰지 않도록 안내문 형태일 때만 건드린다. */
+      match: /검색$|^search\b/i
+    },
+    {
+      root: '[class*="channelTextArea" i]',
+      pick: '[class*="placeholder" i]',
+      want: '값을 입력하십시오',
+      match: /메시지 보내기|^message\s/i
+    }
+  ];
+
+  function scanChromeText() {
+    for (const spec of CHROME_TEXT) {
+      for (const root of qsa(spec.root)) {
+        const box = spec.pick ? root.querySelector(spec.pick) : root;
+        if (!box) continue;
+
+        /* 글자를 실제로 들고 있는 가장 안쪽 요소를 고른다 — 검색창은 span 이
+           세 겹 중첩돼 있고 문구는 맨 안쪽에 있다. 직접 텍스트 노드가 있는
+           것만 고르므로 <input> 은 애초에 후보가 아니다(값을 건드릴 일이 없다). */
+        const owners = [box, ...box.querySelectorAll('*')].filter((e) =>
+          [...e.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim())
+        );
+        const el = owners[owners.length - 1];
+        if (!el || el.closest('input, textarea, [contenteditable="true"]')) continue;
+
+        const cur = el.textContent.trim();
+        if (cur === spec.want || !spec.match.test(cur)) continue;
+        el.textContent = spec.want;
+      }
+    }
+  }
+
   /* ---------- 임베드 스캔 ----------
      유튜브·링크 미리보기는 사진과 달리 컨테이너를 통째로 접어야 한다.
      디스코드 임베드 마크업은 embedWrapper > embedFull > embedTitle... 처럼

@@ -171,6 +171,22 @@ async function testMasking(wc) {
   await wait(400);
   check('나중에 붙은 배너도 가려짐', await js(wc, '__vis(".bannerLate__b9")'), 'hidden');
 
+  /* 서버·채널 이름은 모드와 무관하게 항상 가려야 한다.
+     여기(숨김 모드)와 아래 '보이기 복원' 양쪽에서 확인한다. */
+  console.log('\n[크롬] 서버·채널 이름');
+  check('상단 바(서버 이름) 감춤', await js(wc, '__vis(".title_c38106")'), 'hidden');
+  check('채널 이름 감춤', await js(wc, '__vis(".title__9293f")'), 'hidden');
+  check(
+    '검색 문구에서 서버 이름 제거',
+    await js(wc, 'document.querySelector(".search__49676").textContent.trim()'),
+    '검색'
+  );
+  check(
+    '입력 안내문에서 채널 이름 제거',
+    await js(wc, 'document.querySelector(".placeholder__1b31f").textContent.trim()'),
+    '값을 입력하십시오'
+  );
+
   console.log('\n[가림] 패널 접기');
   await js(wc, 'window.__dioSetPanels(false)');
   await wait(300);
@@ -190,6 +206,20 @@ async function testMasking(wc) {
   check('스티커 복원', await js(wc, '__vis(".stickerAsset__s2")'), 'visible');
   check('사진 복원', await js(wc, '__vis("#chat-messages-1-3 .lazyImg__i2")'), 'visible');
   check('패널 복원', await js(wc, '__vis(".guilds__a1")'), 'visible');
+
+  // 이건 "항상 적용"이라 보이기 모드로 돌아와도 그대로 가려져 있어야 한다
+  check('보이기 모드에서도 서버 이름 감춤', await js(wc, '__vis(".title_c38106")'), 'hidden');
+  check('보이기 모드에서도 채널 이름 감춤', await js(wc, '__vis(".title__9293f")'), 'hidden');
+  check(
+    '보이기 모드에서도 검색 문구 유지',
+    await js(wc, 'document.querySelector(".search__49676").textContent.trim()'),
+    '검색'
+  );
+  check(
+    '보이기 모드에서도 입력 안내문 유지',
+    await js(wc, 'document.querySelector(".placeholder__1b31f").textContent.trim()'),
+    '값을 입력하십시오'
+  );
 }
 
 /* ---------------- 펼치기 토글 ---------------- */
