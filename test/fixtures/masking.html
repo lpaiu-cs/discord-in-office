@@ -1,0 +1,77 @@
+<!-- 가림 정확성 픽스처.
+     스크린샷에서 실제로 노출됐던 형태들을 그대로 재현한다:
+     캐멀케이스 아바타, 배경이미지 아바타, 유튜브 임베드, 스티커, 사진(단일/캐러셀). -->
+<meta charset="utf-8"><title>masking fixture</title>
+<style>body{margin:0;font:13px sans-serif}li{list-style:none;padding:4px 8px}</style>
+<div id="app-mount" class="theme-darker">
+  <div class="guilds__a1"></div>
+  <div class="sidebar__b2"></div>
+  <div class="chat__c3"><ol id="rows"></ol></div>
+</div>
+<script>
+// naturalWidth 가 100 이상이어야 사진 스캔의 크기 필터를 통과한다
+const BIG = 'data:image/svg+xml;base64,' + btoa(
+  '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="150">' +
+  '<rect width="200" height="150" fill="#999"/></svg>');
+const CDN = 'https://cdn.discordapp.com';
+
+const guilds = document.querySelector('.guilds__a1');
+for (let i = 0; i < 3; i++) {
+  const im = document.createElement('img');
+  im.className = 'guildIcon__q';
+  im.src = CDN + '/icons/' + i + '/g.png';
+  guilds.append(im);
+}
+
+document.querySelector('.sidebar__b2').innerHTML =
+  '<div class="containerDefault__c">🌈 | 히키특수학교 💚</div>' +
+  // 캐멀케이스 — [class*="avatar"] 가 대소문자 때문에 놓치던 형태
+  '<div class="voiceUser__v"><img class="voiceUserAvatar__w" src="' + CDN + '/avatars/11/x.png"></div>' +
+  '<div class="voiceUser__v"><img class="replyAvatar__w" src="' + CDN + '/avatars/12/y.png"></div>' +
+  // img 가 아니라 인라인 background-image 로 그려지는 아바타
+  '<div class="panelAvatar__p" style="background-image:url(' + CDN + '/avatars/13/z.png);width:32px;height:32px"></div>' +
+  // 처음엔 배경이 비어 있다. 길드 전환·비동기 로딩으로 나중에 배너가 붙는
+  // 상황을 테스트가 재현한다 (같은 노드를 유지한 채 style 만 바뀐다).
+  '<div class="bannerLate__b9" style="width:100px;height:40px"></div>';
+
+const rows = document.getElementById('rows');
+const li = (id, inner) =>
+  '<li id="chat-messages-1-' + id + '" role="article">' +
+  '<img class="avatar__h1" src="' + CDN + '/avatars/1/a.png" alt="쿠쿠">' +
+  '<span class="username__y">쿠쿠</span><div class="contents__x">' + inner + '</div></li>';
+
+rows.innerHTML =
+  // 1) 링크 임베드 (embed* 클래스가 중첩된 구조 — 가장 바깥만 접혀야 한다)
+  li(1,
+    '<div class="markup__z">보세요 😀</div>' +
+    '<article class="embedWrapper__e1"><div class="embedFull__e2">' +
+    '<div class="embedProvider__e3">YouTube</div>' +
+    '<a class="embedTitleLink__e4" href="https://www.youtube.com/shorts/abc">제목</a>' +
+    '<img class="embedImage__e5" src="' + BIG + '">' +
+    // 실제 유튜브 임베드는 재생을 누르면 iframe 플레이어가 들어온다.
+    // 펼쳤을 때 이것까지 보여야 재생이 된다.
+    '<iframe class="embedPlayer__e6" src="about:blank"></iframe>' +
+    '</div></article>') +
+  // 2) 스티커 (디스코드가 이름을 내장 렌더한다)
+  li(2,
+    '<div class="stickerContainer__s1" style="width:160px;height:160px">' +
+    '<img class="stickerAsset__s2" src="https://media.discordapp.net/stickers/9/s.png" alt="시오짱">' +
+    '<div class="stickerName__s3">시오짱</div></div>') +
+  // 3) 단일 첨부 사진
+  li(3, '<div class="imageWrapper__i1"><img class="lazyImg__i2" src="' + BIG + '"></div>') +
+  // 4) 캐러셀 묶음 — 대표 하나만 버튼이 붙고 묶음 단위로 펼쳐져야 한다
+  li(4,
+    '<div class="carousel__c1">' +
+    '<div class="imageWrapper__i1"><img class="lazyImg__i2" src="' + BIG + '"></div>' +
+    '<div class="imageWrapper__i1"><img class="lazyImg__i2" src="' + BIG + '"></div>' +
+    '<div class="imageWrapper__i1"><img class="lazyImg__i2" src="' + BIG + '"></div>' +
+    '</div>');
+
+// 이미지 디코딩이 끝나야 naturalWidth 가 잡힌다
+window.__ready = Promise.all(
+  [...document.images].map((im) => (im.complete ? null : new Promise((r) => {
+    im.addEventListener('load', r, { once: true });
+    im.addEventListener('error', r, { once: true });
+  })))
+).then(() => true);
+</script>
