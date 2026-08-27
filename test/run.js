@@ -186,6 +186,23 @@ async function testMasking(wc) {
     await js(wc, 'document.querySelector(".placeholder__1b31f").textContent.trim()'),
     '값을 입력하십시오'
   );
+  /* 검색 결과 패널도 클래스에 search 가 들어간다. 그 안의 실제 메시지가 우연히
+     "…검색" 으로 끝난다고 안내문으로 오인해 덮어쓰면 대화 내용이 사라진다. */
+  check(
+    '검색 결과의 실제 메시지는 건드리지 않음',
+    await js(wc, 'document.querySelector(".messageContent__r2").textContent.trim()'),
+    '자료 검색'
+  );
+  check(
+    '결과가 하나뿐인 패널도 건드리지 않음',
+    await js(wc, 'document.querySelector(".messageContent__r5").textContent.trim()'),
+    '회의록 검색'
+  );
+  check(
+    '검색창 아이콘은 남아 있음',
+    await js(wc, '!!document.querySelector(".search__49676 svg")'),
+    true
+  );
 
   /* React 는 서버·채널을 옮길 때 텍스트 노드를 그대로 둔 채 nodeValue 만
      갈아끼우기도 한다. 그건 characterData 변이라 addedNodes 가 없어서

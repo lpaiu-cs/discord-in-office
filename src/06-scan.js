@@ -74,10 +74,15 @@
      바꿀 수 없기 때문이다. */
   const CHROME_TEXT = [
     {
-      root: '[class*="search" i]',
+      /* "search__해시" 만 잡는다.
+         [class*="search"] 로 넓게 잡으면 검색 결과 패널(searchResultsWrap__해시
+         등)까지 들어오고, 거기 있는 실제 메시지가 우연히 "…검색" 으로 끝나면
+         대화 내용을 안내문으로 오인해 덮어쓴다.
+         디스코드 클래스는 <모듈명>__<해시> 꼴이라 "search" 바로 뒤에 "__" 가
+         오는 것만이 검색창 본체다. 결과 패널은 searchResults… 처럼 이어져서
+         이 패턴에 걸리지 않는다. */
+      root: '[class*="search__" i]',
       want: '검색',
-      /* [class*="search"] 는 검색 결과 패널 같은 것도 잡는다. 실수로 결과
-         텍스트를 덮어쓰지 않도록 안내문 형태일 때만 건드린다. */
       match: /검색$|^search\b/i
     },
     {
@@ -88,22 +93,37 @@
     }
   ];
 
-  /* 글자를 실제로 들고 있는 가장 안쪽 요소를 고른다 — 검색창은 span 이 세 겹
-     중첩돼 있고 문구는 맨 안쪽에 있다. 직접 텍스트 노드가 있는 것만 고르므로
-     <input> 은 애초에 후보가 아니다(값을 건드릴 일이 없다).
-     매번 다시 찾는다 — React 가 안쪽 요소를 갈아끼워도 따라가야 한다. */
+  /* 이 안쪽은 이모지 래핑 대상에서 뺀다. 문구를 통째로 갈아끼우는 자리라
+     .dio-emoji-text 스팬이 끼면, 그 스팬을 되살리는 쪽과 문구를 덮는 쪽이
+     서로 밀어내며 DOM 을 계속 건드린다. */
+  const CHROME_ROOTS = CHROME_TEXT.map((s) => s.root).join(', ');
+
+  // 안내문은 짧다. 이보다 길면 대화 내용일 가능성이 높다.
+  const CHROME_MAX = 60;
+
   function applyChromeText(root, spec) {
     if (!root || !root.isConnected) return;
     const box = spec.pick ? root.querySelector(spec.pick) : root;
-    if (!box) return;
-    const owners = [box, ...box.querySelectorAll('*')].filter((e) =>
-      [...e.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim())
-    );
-    const el = owners[owners.length - 1];
-    if (!el || el.closest('input, textarea, [contenteditable="true"]')) return;
-    const cur = el.textContent.trim();
-    if (cur === spec.want || !spec.match.test(cur)) return;
-    el.textContent = spec.want;
+    if (!box || box.closest('input, textarea, [contenteditable="true"]')) return;
+
+    /* 상자의 텍스트 **전체**가 곧 그 안내문이어야 한다.
+       조각 하나만 보고 판단하면 대화 내용을 안내문으로 오인한다 — 결과 패널의
+       마지막 메시지가 "자료 검색" 이면 그걸 "검색" 으로 덮어쓰게 된다. */
+    const whole = box.textContent.trim();
+    if (whole === spec.want) return;
+    if (whole.length > CHROME_MAX || !spec.match.test(whole)) return;
+
+    /* 텍스트 노드만 갈아끼운다. box.textContent 에 통째로 대입하면 돋보기
+       아이콘 같은 자식 요소가 날아가고 디스코드 쪽 핸들러까지 같이 사라진다.
+       매번 다시 훑는다 — React 가 안쪽을 갈아끼워도 따라가야 한다. */
+    const walk = document.createTreeWalker(box, NodeFilter.SHOW_TEXT);
+    const texts = [];
+    while (walk.nextNode()) {
+      if (walk.currentNode.textContent.trim()) texts.push(walk.currentNode);
+    }
+    if (!texts.length) return;
+    texts[0].nodeValue = spec.want;
+    for (let i = 1; i < texts.length; i++) texts[i].nodeValue = '';
   }
 
   /* 스캔 스케줄러는 childList 만 관측하고, 증분 스캔은 변이가 난 서브트리만
@@ -373,6 +393,8 @@
     }
     // 기존 스팬 토글
     for (const s of qsa('.dio-emoji-text')) {
+      // 크롬 안에 남아 있으면 문구 치환과 계속 부딪힌다
+      if (s.closest(CHROME_ROOTS)) { s.replaceWith(s.dataset.orig || ''); continue; }
       const orig = s.dataset.orig || '';
       const want = DIO.visible ? orig : describe(orig);
       if (s.textContent !== want) s.textContent = want;
@@ -389,6 +411,8 @@
         if (!p) return NodeFilter.FILTER_REJECT;
         if (p.closest('input, textarea, [contenteditable], script, style')) return NodeFilter.FILTER_REJECT;
         if (p.closest('.dio-emoji-text, [id^="dio-"]')) return NodeFilter.FILTER_REJECT;
+        // 문구를 통째로 갈아끼우는 자리 — 여기 스팬을 심으면 서로 밀어낸다
+        if (p.closest(CHROME_ROOTS)) return NodeFilter.FILTER_REJECT;
         return EMOJI_RE.test(n.textContent) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
       }
     });
