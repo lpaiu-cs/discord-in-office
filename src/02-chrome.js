@@ -28,10 +28,17 @@
        리본에 눌린 상태가 보이는 버튼으로도 둔다.
        클릭은 preload 통로로 메인 프로세스에 보낸다 — 단축키·메뉴와 같은 곳으로
        모아야 설정 저장과 메뉴 라벨 갱신이 어긋나지 않는다. */
+    /* macOS 는 메인 프로세스가 Cmd 로 판정한다(input.meta). 안내를 Ctrl 로
+       고정해두면 맥 사용자가 그대로 눌러도 아무 일이 없다. */
+    const key = (letter, shift) =>
+      DIO.mac
+        ? '⌘' + (shift ? '⇧' : '') + letter
+        : 'Ctrl+' + (shift ? 'Shift+' : '') + letter;
+
     hideBtn = el('dio-rbtn', '내용 가리기');
-    hideBtn.title = '이모지·사진·임베드·프로필 가리기 (Ctrl+E)';
+    hideBtn.title = '이모지·사진·임베드·프로필 가리기 (' + key('E') + ')';
     panelBtn = el('dio-rbtn', '탐색 창');
-    panelBtn.title = '서버·채널 목록 접기/펴기 (Ctrl+Shift+B)';
+    panelBtn.title = '서버·채널 목록 접기/펴기 (' + key('B', true) + ')';
 
     const send = (name, local) => (e) => {
       e.preventDefault();

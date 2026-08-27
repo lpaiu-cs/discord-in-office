@@ -116,6 +116,7 @@
   window.__DIO_BOOT = function (cfg) {
     DIO.visible = !(cfg && cfg.emojiVisible === false);
     DIO.panels = !(cfg && cfg.panelsVisible === false);
+    DIO.mac = !!(cfg && cfg.isMac); // buildChrome 이 안내 문구에 쓴다
     document.body.classList.toggle('dio-hide', !DIO.visible);
     document.body.classList.toggle('dio-nopanel', !DIO.panels);
     buildChrome();

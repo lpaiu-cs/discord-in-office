@@ -61,7 +61,9 @@ async function injectAll() {
       js +
         `;__DIO_BOOT(${JSON.stringify({
           emojiVisible: cfg.emojiVisible,
-          panelsVisible: cfg.panelsVisible
+          panelsVisible: cfg.panelsVisible,
+          // 단축키 판정과 같은 값을 넘긴다 — 안내 문구가 실제와 어긋나지 않도록
+          isMac: process.platform === 'darwin'
         })});`
     );
   } catch (e) {

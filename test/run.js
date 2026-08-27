@@ -286,6 +286,13 @@ async function testMasking(wc) {
      리본에 상태가 보이는 버튼이 있어야 한다. */
   console.log('\n[리본] 토글 버튼');
   check('버튼 2개 존재', await js(wc, '__count("#dio-ribbon .dio-rbtn")'), 2);
+  /* 안내 문구가 실제 단축키와 어긋나면 그대로 눌러도 아무 일이 없다.
+     맥은 메인 프로세스가 Cmd(input.meta)로 판정하므로 안내도 그래야 한다. */
+  check(
+    '윈도우 안내는 Ctrl',
+    await js(wc, 'document.querySelectorAll("#dio-ribbon .dio-rbtn")[0].title.includes("Ctrl+E")'),
+    true
+  );
   check(
     '가리는 중이면 눌린 표시',
     await js(wc, 'document.querySelectorAll("#dio-ribbon .dio-rbtn")[0].classList.contains("dio-pressed")'),
@@ -308,6 +315,15 @@ async function testMasking(wc) {
   await js(wc, 'document.querySelectorAll("#dio-ribbon .dio-rbtn")[1].click()');
   await wait(400);
   check('다시 눌러 원복', await js(wc, '__vis(".guilds__a1")'), 'visible');
+
+  // 맥으로 부팅하면 같은 버튼이 Cmd 로 안내해야 한다
+  await boot(wc, 'masking.html', { emojiVisible: false, panelsVisible: true, isMac: true });
+  const titles = await js(
+    wc,
+    '[...document.querySelectorAll("#dio-ribbon .dio-rbtn")].map(b => b.title).join(" | ")'
+  );
+  check('맥 안내는 Cmd 기호', titles.indexOf('⌘E') > -1 && titles.indexOf('⌘⇧B') > -1, true);
+  check('맥 안내에 Ctrl 없음', titles.indexOf('Ctrl') === -1, true);
 
   console.log('\n[가림] 패널 접기');
   await js(wc, 'window.__dioSetPanels(false)');
