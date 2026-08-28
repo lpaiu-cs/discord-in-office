@@ -211,16 +211,30 @@
      후보도 메시지 자신과 직계 자식까지만 본다 — 여백은 거기 있다. */
   const GUTTER_MIN = 40; // 이보다 크면 아바타 자리로 본다
 
+  function markedGutter(li) {
+    if (li.classList.contains('dio-nogutter')) return li;
+    return li.querySelector(':scope > .dio-nogutter');
+  }
+
   function scanGutter() {
     for (const li of qsa(SEL.msg)) {
-      /* 표시가 이미 붙어 있으면 다시 재지 않는다 — 우리가 눌러둔 0px 을 다시
-         재면 "여백 없음" 으로 읽혀서 표시를 뗐다 붙였다 하게 된다.
-         반대로 **아직 표시가 없는 것은 매번 다시 본다.** 디스코드는 SPA 라
-         같은 메시지 노드를 유지한 채 그룹 경계를 바꾸기도 하는데, 이어지는
-         메시지였다가 나중에 그룹 시작이 되면 그때 아바타 자리가 생긴다.
-         노드 수명 내내 판정을 고정해두면 그 경우 빈자리가 영영 남는다. */
-      if (li.classList.contains('dio-nogutter')) continue;
-      if (li.querySelector(':scope > .dio-nogutter')) continue;
+      const marked = markedGutter(li);
+      if (marked) {
+        /* 이미 표시된 것을 숨김 모드에서 다시 재면 안 된다 — 우리가 눌러둔
+           0px 을 읽고 "여백 없음" 으로 판단해 표시를 뗐다 붙였다 하게 된다.
+
+           보이기 모드에서는 우리 규칙(.dio-hide 하위)이 꺼져 있어 **원래 값을
+           그대로 읽을 수 있다.** 재판정은 그때만 한다. 반응형이나 표시 모드가
+           바뀌어 72px 이 16px 같은 의미 있는 값이 되면, 낡은 표시가 그 16px 까지
+           0 으로 지워 레이아웃을 깨뜨리기 때문이다. */
+        if (DIO.visible && (parseFloat(getComputedStyle(marked).paddingLeft) || 0) < GUTTER_MIN) {
+          marked.classList.remove('dio-nogutter');
+        }
+        continue;
+      }
+      /* 표시가 없는 것은 매번 다시 본다. 디스코드는 SPA 라 같은 메시지 노드를
+         유지한 채 그룹 경계를 바꾸는데, 이어지는 메시지였다가 나중에 그룹
+         시작이 되면 그때 아바타 자리가 생긴다. */
       for (const el of [li, ...li.children]) {
         if ((parseFloat(getComputedStyle(el).paddingLeft) || 0) >= GUTTER_MIN) {
           el.classList.add('dio-nogutter');

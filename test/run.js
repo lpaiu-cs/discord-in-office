@@ -359,6 +359,28 @@ async function testMasking(wc) {
     '72px'
   );
 
+  /* 표시를 붙인 뒤 디스코드가 같은 노드의 레이아웃을 바꾸면(반응형·표시 모드),
+     낡은 표시가 의미 있는 들여쓰기까지 0 으로 지운다.
+     보이기 모드에서는 우리 규칙이 꺼져 있어 원래 값을 읽을 수 있으니 그때 뗀다. */
+  await js(
+    wc,
+    'document.getElementById("chat-messages-1-1").style.paddingLeft = "16px"; true;'
+  );
+  await js(wc, '__DIO.scan()');
+  await wait(500);
+  check(
+    '레이아웃이 바뀌면 낡은 표시를 뗌',
+    await js(wc, 'document.getElementById("chat-messages-1-1").classList.contains("dio-nogutter")'),
+    false
+  );
+  await js(wc, 'window.__dioSetEmoji(false)');
+  await wait(700);
+  check(
+    '다시 숨겨도 의미 있는 여백은 지우지 않음',
+    await js(wc, 'getComputedStyle(document.getElementById("chat-messages-1-1")).paddingLeft'),
+    '16px'
+  );
+
   // 이건 "항상 적용"이라 보이기 모드로 돌아와도 그대로 가려져 있어야 한다
   check('보이기 모드에서도 서버 이름 감춤', await js(wc, '__vis(".title_c38106")'), 'hidden');
   check('보이기 모드에서도 채널 이름 감춤', await js(wc, '__vis(".title__9293f")'), 'hidden');
