@@ -381,6 +381,18 @@ async function testMasking(wc) {
     '16px'
   );
 
+  /* 위 검사가 숨김 모드로 되돌려 놓았다. 아래는 "모드와 무관하게 항상 가린다"
+     를 보는 검사이므로 반드시 보이기 모드로 돌아와야 한다.
+     안 그러면 서버·채널 이름 가림이 실수로 .dio-hide 에 묶여도 통과해 버린다. */
+  await js(wc, 'window.__dioSetEmoji(true)');
+  await wait(700);
+  check('보이기 모드로 복귀했는지', await js(wc, '__DIO.visible'), true);
+  check(
+    '보이기 모드다 (콘텐츠가 실제로 보인다)',
+    await js(wc, '__vis(".stickerAsset__s2")'),
+    'visible'
+  );
+
   // 이건 "항상 적용"이라 보이기 모드로 돌아와도 그대로 가려져 있어야 한다
   check('보이기 모드에서도 서버 이름 감춤', await js(wc, '__vis(".title_c38106")'), 'hidden');
   check('보이기 모드에서도 채널 이름 감춤', await js(wc, '__vis(".title__9293f")'), 'hidden');
