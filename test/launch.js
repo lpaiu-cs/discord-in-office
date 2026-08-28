@@ -56,7 +56,10 @@ const DRIVER = [
   '          return await wc.executeJavaScript(',
   '            \'typeof __DIO === "undefined" ? "NO_DIO" : JSON.stringify({\' +',
   '            \' hide: document.body.classList.contains("dio-hide"),\' +',
-  '            \' nopanel: document.body.classList.contains("dio-nopanel") })\'',
+  '            \' nopanel: document.body.classList.contains("dio-nopanel"),\' +',
+  '            \' bodyShown: getComputedStyle(document.body).display !== "none",\' +',
+  '            \' bg: getComputedStyle(document.documentElement)\' +',
+  '            \'   .getPropertyValue("--background-primary").trim() })\'',
   '          );',
   '        } catch (e) { return "READERR:" + e.message; }',
   '      };',
@@ -168,6 +171,28 @@ try {
        채널인지 알 수 없는 화면으로 시작해서, 눌린 줄도 모르고 헤매게 된다. */
     check('접었어도 다음 실행은 펴진 상태', c.boot.nopanel, false);
     check('패널 상태는 저장되지 않음', !c.cfg || c.cfg.panelsVisible === undefined, true);
+  }
+
+  /* 라이트 토큰 캐시는 원격 페이지가 보낸 값에서 나온다. 파일이 손대졌거나
+     그 페이지가 한 번 오염됐다면, 검증 없이 쓸 경우 임의 CSS 가 다음 실행부터
+     계속 적용된다 — 공격이 사라진 뒤에도 살아남는다는 뜻이다.
+     값에 중괄호를 넣어 규칙을 탈출하려는 시도를 막는지 본다. */
+  console.log(NL + '[실행] 손댄 토큰 캐시는 걸러야 한다');
+  const udE = path.join(tmp, 'ud-e');
+  fs.mkdirSync(udE, { recursive: true });
+  fs.writeFileSync(
+    path.join(udE, 'light-tokens.json'),
+    JSON.stringify({
+      '--background-primary': '#eeeeee',
+      '--evil': 'red}*{display:none!important}',
+      notAToken: 'red',
+      '--script': '</style><script>1</script>'
+    })
+  );
+  const e2 = run(appDir, udE, [], []);
+  if (ranOk('손댄 캐시 실행', e2)) {
+    check('규칙 탈출이 막힘(본문이 살아 있음)', e2.boot.bodyShown, true);
+    check('멀쩡한 토큰은 적용됨', e2.boot.bg, '#eeeeee');
   }
 
   console.log(NL + '[실행] Ctrl+E 로 명시적으로 바꾼 것은 저장된다');

@@ -12,6 +12,9 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('dioBridge', {
   toggleEmoji: () => ipcRenderer.send('dio:toggle-emoji'),
   togglePanels: () => ipcRenderer.send('dio:toggle-panels'),
-  // 20초짜리 토큰 수집을 매번 되풀이하지 않도록 결과를 저장해 둔다
-  saveLightCss: (css) => ipcRenderer.send('dio:save-light-css', css)
+  /* 20초짜리 토큰 수집을 매번 되풀이하지 않도록 결과를 저장해 둔다.
+     완성된 CSS 가 아니라 토큰 이름·값만 넘긴다 — 이 페이지는 원격 콘텐츠라
+     한 번이라도 오염되면 임의 CSS 가 파일로 남아 다음 실행부터 계속 적용된다.
+     CSS 문자열 조립은 메인 프로세스가 한다. */
+  saveLightTokens: (tokens) => ipcRenderer.send('dio:save-light-tokens', tokens)
 });

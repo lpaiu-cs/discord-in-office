@@ -210,12 +210,17 @@
      계산 스타일 읽기는 비싸므로 메시지당 한 번만 하고 기억해 둔다.
      후보도 메시지 자신과 직계 자식까지만 본다 — 여백은 거기 있다. */
   const GUTTER_MIN = 40; // 이보다 크면 아바타 자리로 본다
-  const gutterSeen = new WeakSet();
 
   function scanGutter() {
     for (const li of qsa(SEL.msg)) {
-      if (gutterSeen.has(li)) continue;
-      gutterSeen.add(li);
+      /* 표시가 이미 붙어 있으면 다시 재지 않는다 — 우리가 눌러둔 0px 을 다시
+         재면 "여백 없음" 으로 읽혀서 표시를 뗐다 붙였다 하게 된다.
+         반대로 **아직 표시가 없는 것은 매번 다시 본다.** 디스코드는 SPA 라
+         같은 메시지 노드를 유지한 채 그룹 경계를 바꾸기도 하는데, 이어지는
+         메시지였다가 나중에 그룹 시작이 되면 그때 아바타 자리가 생긴다.
+         노드 수명 내내 판정을 고정해두면 그 경우 빈자리가 영영 남는다. */
+      if (li.classList.contains('dio-nogutter')) continue;
+      if (li.querySelector(':scope > .dio-nogutter')) continue;
       for (const el of [li, ...li.children]) {
         if ((parseFloat(getComputedStyle(el).paddingLeft) || 0) >= GUTTER_MIN) {
           el.classList.add('dio-nogutter');

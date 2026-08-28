@@ -50,13 +50,12 @@
     DIO.lightCssApplied = true;
   }
 
-  /* 지난 실행에서 뽑아둔 것을 메인 프로세스가 넘겨준다. 있으면 즉시 적용하고
-     수집은 건너뛴다 — 시작이 20초 걸리던 원인이 그 수집이었다. */
-  function useCachedLightCss(css) {
-    if (!css) return false;
-    applyLightCss(css);
+  /* 지난 실행에서 뽑아둔 토큰은 메인 프로세스가 이미 insertCSS 로 넣었다.
+     여기서는 "이미 적용됐다" 는 사실만 기록해 수집을 건너뛴다 —
+     시작이 20초 걸리던 원인이 그 수집이었다. */
+  function markLightCached() {
+    DIO.lightCssApplied = true;
     DIO.lightFromCache = true;
-    return true;
   }
 
   async function fetchSheets(links) {
@@ -117,8 +116,12 @@
       applyLightCss(out);
       DIO.lightTokenCount = map.size;
       cssCache.clear(); // 래치 후엔 다시 안 쓴다 — 2.8MB를 붙잡고 있을 이유가 없다
-      // 다음 실행은 이걸 그대로 쓰면 된다 — 20초짜리 수집을 되풀이하지 않는다
-      if (window.dioBridge && window.dioBridge.saveLightCss) window.dioBridge.saveLightCss(out);
+      /* 다음 실행은 이걸 그대로 쓰면 된다 — 20초짜리 수집을 되풀이하지 않는다.
+         완성된 CSS 가 아니라 토큰 맵을 넘긴다. 이 페이지는 원격 콘텐츠라,
+         CSS 를 그대로 저장하게 두면 한 번의 오염이 다음 실행까지 살아남는다. */
+      if (window.dioBridge && window.dioBridge.saveLightTokens) {
+        window.dioBridge.saveLightTokens(Object.fromEntries(map));
+      }
     } catch (e) {
       DIO.lastErr = 'forceLightTokens: ' + e.message;
     } finally {

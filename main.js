@@ -28,8 +28,39 @@ const configPath = () => path.join(app.getPath('userData'), 'config.json');
 /* 라이트 테마 토큰 캐시.
    실측: 로그인 화면에서만 시트 303장(2.8MB)이고, 전부 받아 토큰을 뽑는 데
    20.6초가 걸렸다. 그 사이 디스코드 자신의 리소스 로딩과 경쟁해서 로딩 화면이
-   중간에 멈춰 보였다. 한 번 뽑아두면 다음 실행부터는 그대로 쓰면 된다. */
-const lightCssPath = () => path.join(app.getPath('userData'), 'light-tokens.css');
+   중간에 멈춰 보였다. 한 번 뽑아두면 다음 실행부터는 그대로 쓰면 된다.
+
+   저장은 **토큰 맵(JSON)** 으로 한다. 완성된 CSS 를 렌더러에서 받아 그대로
+   쓰면, discord.com 이 한 번이라도 오염됐을 때 임의 CSS 가 파일로 남아
+   공격이 사라진 뒤에도 매 실행 적용된다. 이름·값 모양을 확인하고 CSS 는
+   여기서 조립한다. 읽을 때도 다시 확인한다 — 파일이 손대졌을 수 있다. */
+const lightTokensPath = () => path.join(app.getPath('userData'), 'light-tokens.json');
+
+const TOKEN_NAME = /^--[a-z0-9-]{1,80}$/i;
+const TOKEN_VALUE = /^[^{}<>;@\\]{1,200}$/;
+const LIGHT_SCOPE =
+  ':root,.theme-light,.theme-dark,.theme-darker,.theme-midnight,.theme-darkest,.theme-ash';
+
+function sanitizeTokens(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const out = {};
+  let n = 0;
+  for (const [k, v] of Object.entries(raw)) {
+    if (n >= 2000) break; // 실측 621개 — 이보다 훨씬 많으면 정상이 아니다
+    if (typeof v !== 'string') continue;
+    if (!TOKEN_NAME.test(k) || !TOKEN_VALUE.test(v)) continue;
+    if (v.includes('/*') || v.includes('*/')) continue;
+    out[k] = v;
+    n++;
+  }
+  return n ? out : null;
+}
+
+function tokensToCss(tokens) {
+  let css = LIGHT_SCOPE + '{';
+  for (const [k, v] of Object.entries(tokens)) css += k + ':' + v + ' !important;';
+  return css + '}';
+}
 
 function loadCfg() {
   try {
@@ -62,11 +93,20 @@ async function injectAll() {
   const css = fs.readFileSync(path.join(__dirname, 'excel.css'), 'utf8');
   const js = bundle(); // src/*.js 를 순서대로 이어붙인 것
 
-  // 지난 실행에서 뽑아둔 토큰이 있으면 같이 넘긴다 — 수집을 건너뛸 수 있다
-  let lightCss = '';
-  try { lightCss = fs.readFileSync(lightCssPath(), 'utf8'); } catch {}
+  /* 지난 실행에서 뽑아둔 토큰. CSS 문자열은 저장하지 않고 매번 조립한다 —
+     파일이 손대졌더라도 sanitizeTokens 를 통과한 이름·값만 들어간다. */
+  let tokens = null;
+  try {
+    tokens = sanitizeTokens(JSON.parse(fs.readFileSync(lightTokensPath(), 'utf8')));
+  } catch {}
+
   try {
     await wc.insertCSS(css);
+    /* excel.css 뒤에 넣어야 한다. 라이브 추출 경로는 <style> 을 head 끝에
+       붙여서 excel.css 를 이기는데, 캐시를 앞에 넣으면 반대로 밀린다 —
+       같은 토큰인데 캐시가 있고 없고에 따라 화면이 달라진다. */
+    if (tokens) await wc.insertCSS(tokensToCss(tokens));
+    const lightCached = !!tokens;
     await wc.executeJavaScript(
       js +
         `;__DIO_BOOT(${JSON.stringify({
@@ -74,7 +114,7 @@ async function injectAll() {
           panelsVisible: cfg.panelsVisible,
           // 단축키 판정과 같은 값을 넘긴다 — 안내 문구가 실제와 어긋나지 않도록
           isMac: process.platform === 'darwin',
-          lightCss
+          lightCached
         })});`
     );
   } catch (e) {
@@ -259,12 +299,14 @@ function toggleEmoji() {
 ipcMain.on('dio:toggle-emoji', () => toggleEmoji());
 ipcMain.on('dio:toggle-panels', () => togglePanels());
 
-ipcMain.on('dio:save-light-css', (_e, css) => {
-  // 렌더러가 보내는 값이므로 형태와 크기를 확인하고 받는다
-  if (typeof css !== 'string' || !css || css.length > 2000000) return;
+ipcMain.on('dio:save-light-tokens', (e, raw) => {
+  // 우리 창에서 온 것만 받는다
+  if (!win || win.isDestroyed() || e.sender !== win.webContents) return;
+  const tokens = sanitizeTokens(raw);
+  if (!tokens) return;
   try {
-    fs.mkdirSync(path.dirname(lightCssPath()), { recursive: true });
-    fs.writeFileSync(lightCssPath(), css);
+    fs.mkdirSync(path.dirname(lightTokensPath()), { recursive: true });
+    fs.writeFileSync(lightTokensPath(), JSON.stringify(tokens));
   } catch {}
 });
 

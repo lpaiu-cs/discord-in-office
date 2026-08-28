@@ -119,7 +119,7 @@
     DIO.visible = !(cfg && cfg.emojiVisible === false);
     DIO.panels = !(cfg && cfg.panelsVisible === false);
     DIO.mac = !!(cfg && cfg.isMac); // buildChrome 이 안내 문구에 쓴다
-    if (cfg && cfg.lightCss) useCachedLightCss(cfg.lightCss);
+    if (cfg && cfg.lightCached) markLightCached();
     document.body.classList.toggle('dio-hide', !DIO.visible);
     document.body.classList.toggle('dio-nopanel', !DIO.panels);
     buildChrome();
