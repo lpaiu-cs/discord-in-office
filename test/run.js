@@ -136,6 +136,14 @@ async function testMasking(wc) {
     'visible'
   );
   check('채널 설명 감춤', await js(wc, '__vis(".topic__9293f")'), 'hidden');
+  /* 아바타를 없애도 그 자리를 비워두는 여백이 남는다(디스코드는 아바타를
+     절대배치하고 본문에 큰 padding-left 를 준다). 클래스명을 넘겨짚지 않고
+     실측으로 찾아 지운다. */
+  check(
+    '아바타 자리 여백 제거',
+    await js(wc, 'getComputedStyle(document.getElementById("chat-messages-1-1")).paddingLeft'),
+    '0px'
+  );
 
   // 임베드 — 중첩 구조에서 가장 바깥만 접혀야 한다
   check('임베드 접힘', await js(wc, '__vis(".embedWrapper__e1")'), 'hidden');
@@ -344,6 +352,46 @@ async function testMasking(wc) {
   check('스티커 복원', await js(wc, '__vis(".stickerAsset__s2")'), 'visible');
   check('사진 복원', await js(wc, '__vis("#chat-messages-1-3 .lazyImg__i2")'), 'visible');
   check('패널 복원', await js(wc, '__vis(".guilds__a1")'), 'visible');
+  // 여백 제거는 숨김 모드 한정이다 — 보이기로 돌아오면 아바타가 다시 그 자리에 온다
+  check(
+    '보이기 모드에서는 여백 복원',
+    await js(wc, 'getComputedStyle(document.getElementById("chat-messages-1-1")).paddingLeft'),
+    '72px'
+  );
+
+  /* 표시를 붙인 뒤 디스코드가 같은 노드의 레이아웃을 바꾸면(반응형·표시 모드),
+     낡은 표시가 의미 있는 들여쓰기까지 0 으로 지운다.
+     보이기 모드에서는 우리 규칙이 꺼져 있어 원래 값을 읽을 수 있으니 그때 뗀다. */
+  await js(
+    wc,
+    'document.getElementById("chat-messages-1-1").style.paddingLeft = "16px"; true;'
+  );
+  await js(wc, '__DIO.scan()');
+  await wait(500);
+  check(
+    '레이아웃이 바뀌면 낡은 표시를 뗌',
+    await js(wc, 'document.getElementById("chat-messages-1-1").classList.contains("dio-nogutter")'),
+    false
+  );
+  await js(wc, 'window.__dioSetEmoji(false)');
+  await wait(700);
+  check(
+    '다시 숨겨도 의미 있는 여백은 지우지 않음',
+    await js(wc, 'getComputedStyle(document.getElementById("chat-messages-1-1")).paddingLeft'),
+    '16px'
+  );
+
+  /* 위 검사가 숨김 모드로 되돌려 놓았다. 아래는 "모드와 무관하게 항상 가린다"
+     를 보는 검사이므로 반드시 보이기 모드로 돌아와야 한다.
+     안 그러면 서버·채널 이름 가림이 실수로 .dio-hide 에 묶여도 통과해 버린다. */
+  await js(wc, 'window.__dioSetEmoji(true)');
+  await wait(700);
+  check('보이기 모드로 복귀했는지', await js(wc, '__DIO.visible'), true);
+  check(
+    '보이기 모드다 (콘텐츠가 실제로 보인다)',
+    await js(wc, '__vis(".stickerAsset__s2")'),
+    'visible'
+  );
 
   // 이건 "항상 적용"이라 보이기 모드로 돌아와도 그대로 가려져 있어야 한다
   check('보이기 모드에서도 서버 이름 감춤', await js(wc, '__vis(".title_c38106")'), 'hidden');

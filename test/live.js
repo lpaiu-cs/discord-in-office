@@ -55,6 +55,13 @@ app.whenReady().then(async () => {
     await wait(6000);
     await wc.insertCSS(fs.readFileSync(path.join(REPO, 'excel.css'), 'utf8'));
     await js(bundle() + ';__DIO_BOOT({ emojiVisible: false, panelsVisible: true });');
+
+    /* 부팅 직후에는 토큰 수집이 아직 열려 있지 않아야 한다.
+       여기서 바로 시트 수백 장을 받아 가면 디스코드 자신의 로딩과 경쟁해서
+       로딩 화면이 중간에 멈춰 보인다(콜드 캐시 실측 20.6초).
+       6초를 기다린 뒤에 보면 이미 열려 있으므로, 반드시 이 자리에서 본다. */
+    check('부팅 직후에는 수집을 열지 않음', await js('!!__DIO.lightAllowed'), false);
+
     await wait(6000);
 
     check('부팅됨', await js('!!__DIO.booted'), true);
@@ -62,12 +69,31 @@ app.whenReady().then(async () => {
     check('리본 생성', await js('!!document.getElementById("dio-ribbon")'), true);
     check('시트바 생성', await js('!!document.getElementById("dio-sheetbar")'), true);
 
+    /* 토큰 수집은 일부러 미룬다. 부팅 직후에 시트 수백 장(2.8MB)을 더 받아 가면
+       디스코드 자신의 로딩과 경쟁해서 로딩 화면이 중간에 멈춰 보인다.
+       그래서 "부팅 직후에는 아직 아니어야 하고, 조금 뒤에는 되어야 한다" 를 본다. */
+    const t0 = Date.now();
+    for (let i = 0; i < 120; i++) {
+      if (await js('!!__DIO.lightCssApplied')) break;
+      await wait(1000);
+    }
+    const took = Math.round((Date.now() - t0) / 1000);
+
     // 라이트 테마 강제는 디스코드 CSS 원문을 실제로 받아와야 성립한다.
     // 픽스처로는 절대 확인할 수 없는 부분이라 여기서만 검증된다.
     check('라이트 토큰 적용', await js('!!__DIO.lightCssApplied'), true);
     const tokens = await js('__DIO.lightTokenCount || 0');
-    console.log('       추출 토큰 ' + tokens + '개 / 스캔 ' + (await js('__DIO.scans')) + '회');
+    console.log(
+      '       추출 토큰 ' + tokens + '개 / 수집까지 ' + took + '초 / 스캔 ' +
+      (await js('__DIO.scans')) + '회'
+    );
     check('토큰이 충분히 추출됨', tokens > 100, true);
+    // 답장·멘션 강조는 워크시트에 있을 색이 아니다 — 추출값 위에 덮어쓴다
+    check(
+      '멘션 강조색이 눌림',
+      await js('getComputedStyle(document.documentElement).getPropertyValue("--background-mentioned").trim()'),
+      'transparent'
+    );
 
     console.log('\n[실페이지] 토글 왕복');
     await js('window.__dioSetEmoji(true)');

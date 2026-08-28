@@ -12,7 +12,7 @@
     try {
       enforceLightTheme();
       void forceLightTokens(); // 성공 후에는 boolean 체크 한 번으로 끝난다
-      for (const pass of [scanChromeText, scanEmojis, scanStickers, scanEmbeds, scanPhotos, scanAvatars, scanBgAvatars, scanDecor, scanTextEmojis]) {
+      for (const pass of [scanChromeText, scanEmojis, scanStickers, scanEmbeds, scanPhotos, scanAvatars, scanBgAvatars, scanGutter, scanDecor, scanTextEmojis]) {
         try {
           pass();
         } catch (e) {
@@ -35,6 +35,8 @@
              (3) 새로 붙은 서브트리만 훑는다.
      놓친 노드는 BACKUP_MS 전체 스캔이 받아낸다(기존 백업 루프와 같은 역할). */
   const SCAN_DELAY = 50;
+  const LIGHT_START_MS = 5000; // 캐시가 없을 때 수집을 시작하기까지
+  const LIGHT_REFRESH_MS = 30000; // 캐시가 있을 때 조용히 갱신하기까지
   const BACKUP_MS = 4000;
   const MAX_ROOTS = 40; // 이보다 쌓이면 전체 스캔이 오히려 싸다
   const OBSERVE = { childList: true, subtree: true };
@@ -117,6 +119,7 @@
     DIO.visible = !(cfg && cfg.emojiVisible === false);
     DIO.panels = !(cfg && cfg.panelsVisible === false);
     DIO.mac = !!(cfg && cfg.isMac); // buildChrome 이 안내 문구에 쓴다
+    if (cfg && cfg.lightCached) markLightCached();
     document.body.classList.toggle('dio-hide', !DIO.visible);
     document.body.classList.toggle('dio-nopanel', !DIO.panels);
     buildChrome();
@@ -124,6 +127,19 @@
     if (!DIO.booted) {
       DIO.booted = true;
       setInterval(() => { wantFull = true; schedule(); }, BACKUP_MS);
+
+      /* 토큰 수집은 페이지가 자리잡은 뒤에 시작한다. 부팅 직후에 2.8MB 를 더
+         받아 가면 디스코드 로딩이 멈춰 보인다(실측 20.6초).
+         캐시로 이미 적용돼 있으면 서두를 이유가 더 없으니, 화면이 완전히
+         자리잡은 뒤 조용히 다시 모아 갱신만 한다 — 디스코드가 CSS 를
+         갈아끼워도 캐시가 낡은 채로 남지 않게. */
+      const delay = DIO.lightFromCache ? LIGHT_REFRESH_MS : LIGHT_START_MS;
+      setTimeout(() => {
+        if (DIO.lightFromCache) DIO.lightCssApplied = false; // 다시 모으게 연다
+        DIO.lightAllowed = true;
+        wantFull = true;
+        schedule();
+      }, delay);
     }
     fullScan();
   };

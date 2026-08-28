@@ -201,6 +201,49 @@
     for (const f of found) watchChrome(f);
   }
 
+  /* ---------- 아바타 자리 여백 ----------
+     아바타를 없애도 그 자리를 비워두는 여백이 남는다. 디스코드는 아바타를
+     절대배치하고 본문 쪽에 큰 padding-left 를 주기 때문이다.
+     클래스 이름을 넘겨짚지 않고, 메시지 안에서 실제로 큰 왼쪽 여백을 가진
+     요소를 찾아 표시만 붙인다. 보이기/숨김 전환은 CSS 가 알아서 한다.
+
+     계산 스타일 읽기는 비싸므로 메시지당 한 번만 하고 기억해 둔다.
+     후보도 메시지 자신과 직계 자식까지만 본다 — 여백은 거기 있다. */
+  const GUTTER_MIN = 40; // 이보다 크면 아바타 자리로 본다
+
+  function markedGutter(li) {
+    if (li.classList.contains('dio-nogutter')) return li;
+    return li.querySelector(':scope > .dio-nogutter');
+  }
+
+  function scanGutter() {
+    for (const li of qsa(SEL.msg)) {
+      const marked = markedGutter(li);
+      if (marked) {
+        /* 이미 표시된 것을 숨김 모드에서 다시 재면 안 된다 — 우리가 눌러둔
+           0px 을 읽고 "여백 없음" 으로 판단해 표시를 뗐다 붙였다 하게 된다.
+
+           보이기 모드에서는 우리 규칙(.dio-hide 하위)이 꺼져 있어 **원래 값을
+           그대로 읽을 수 있다.** 재판정은 그때만 한다. 반응형이나 표시 모드가
+           바뀌어 72px 이 16px 같은 의미 있는 값이 되면, 낡은 표시가 그 16px 까지
+           0 으로 지워 레이아웃을 깨뜨리기 때문이다. */
+        if (DIO.visible && (parseFloat(getComputedStyle(marked).paddingLeft) || 0) < GUTTER_MIN) {
+          marked.classList.remove('dio-nogutter');
+        }
+        continue;
+      }
+      /* 표시가 없는 것은 매번 다시 본다. 디스코드는 SPA 라 같은 메시지 노드를
+         유지한 채 그룹 경계를 바꾸는데, 이어지는 메시지였다가 나중에 그룹
+         시작이 되면 그때 아바타 자리가 생긴다. */
+      for (const el of [li, ...li.children]) {
+        if ((parseFloat(getComputedStyle(el).paddingLeft) || 0) >= GUTTER_MIN) {
+          el.classList.add('dio-nogutter');
+          break;
+        }
+      }
+    }
+  }
+
   /* ---------- 임베드 스캔 ----------
      유튜브·링크 미리보기는 사진과 달리 컨테이너를 통째로 접어야 한다.
      디스코드 임베드 마크업은 embedWrapper > embedFull > embedTitle... 처럼
