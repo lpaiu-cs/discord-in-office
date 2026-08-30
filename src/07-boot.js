@@ -13,11 +13,14 @@
       enforceLightTheme();
       void forceLightTokens(); // 성공 후에는 boolean 체크 한 번으로 끝난다
       for (const pass of [scanChromeText, scanEmojis, scanStickers, scanEmbeds, scanPhotos, scanAvatars, scanBgAvatars, scanGutter, scanDecor, scanTextEmojis]) {
+        const p0 = performance.now();
         try {
           pass();
         } catch (e) {
           DIO.lastErr = pass.name + ': ' + e.message;
         }
+        // 어느 패스가 무는지 실측으로 알 수 있어야 다음 진단이 추측이 아니다
+        DIO.passMs[pass.name] = (DIO.passMs[pass.name] || 0) + (performance.now() - p0);
       }
     } finally {
       roots = null;
@@ -119,23 +122,50 @@
     DIO.visible = !(cfg && cfg.emojiVisible === false);
     DIO.panels = !(cfg && cfg.panelsVisible === false);
     DIO.mac = !!(cfg && cfg.isMac); // buildChrome 이 안내 문구에 쓴다
-    if (cfg && cfg.lightCached) markLightCached();
+    if (cfg && cfg.lightCached) markLightCached(cfg.lightFp);
     document.body.classList.toggle('dio-hide', !DIO.visible);
     document.body.classList.toggle('dio-nopanel', !DIO.panels);
     buildChrome();
     syncRibbon();
     if (!DIO.booted) {
       DIO.booted = true;
-      setInterval(() => { wantFull = true; schedule(); }, BACKUP_MS);
+      /* 백업 전체 스캔은 급하지 않다. 브라우저가 한가할 때 돌려 사용자가
+         스크롤하거나 타이핑하는 순간과 겹치지 않게 한다. timeout 을 두어
+         계속 바쁘더라도 결국은 돈다. */
+      setInterval(() => {
+        wantFull = true;
+        if (window.requestIdleCallback) {
+          requestIdleCallback(() => schedule(), { timeout: BACKUP_MS });
+        } else {
+          schedule();
+        }
+      }, BACKUP_MS);
 
       /* 토큰 수집은 페이지가 자리잡은 뒤에 시작한다. 부팅 직후에 2.8MB 를 더
          받아 가면 디스코드 로딩이 멈춰 보인다(실측 20.6초).
          캐시로 이미 적용돼 있으면 서두를 이유가 더 없으니, 화면이 완전히
          자리잡은 뒤 조용히 다시 모아 갱신만 한다 — 디스코드가 CSS 를
          갈아끼워도 캐시가 낡은 채로 남지 않게. */
-      const delay = DIO.lightFromCache ? LIGHT_REFRESH_MS : LIGHT_START_MS;
+      /* 시간값을 주입할 수 있게 열어 둔다. 재수집 판정은 30초 뒤에 일어나서
+         그대로는 테스트할 수 없는데, 이 기능이 바로 "실행할 때마다 렉이 걸리던"
+         원인이라 반드시 검사가 붙어야 한다. main.js 는 넘기지 않으므로
+         실제 실행에서는 아래 상수가 그대로 쓰인다. */
+      const refreshMs = (cfg && cfg.lightRefreshMs) || LIGHT_REFRESH_MS;
+      const delay = DIO.lightFromCache ? refreshMs : LIGHT_START_MS;
       setTimeout(() => {
-        if (DIO.lightFromCache) DIO.lightCssApplied = false; // 다시 모으게 연다
+        if (DIO.lightFromCache) {
+          /* 디스코드가 CSS 를 갈아끼웠을 때만 다시 모은다.
+             매번 모으면 시트 수백 장(2.8MB)을 또 받아 오게 되고, 그게 실행할
+             때마다 30초쯤에 렉이 걸리던 정체였다. 자산 URL 에 내용 해시가
+             들어 있어 목록만 비교하면 된다 — 받아볼 필요가 없다. */
+          const now = sheetFingerprint();
+          DIO.lightFpNow = now;
+          if (now === DIO.lightFp) {
+            DIO.lightRefreshSkipped = true;
+            return;
+          }
+          DIO.lightCssApplied = false; // 바뀌었다 — 다시 모으게 연다
+        }
         DIO.lightAllowed = true;
         wantFull = true;
         schedule();

@@ -444,6 +444,41 @@ async function testMasking(wc) {
   );
 }
 
+/* ---------------- 라이트 토큰 재수집 판정 ---------------- */
+async function testLightRefresh(wc) {
+  /* 캐시가 있어도 매번 다시 모으면 시트 수백 장(2.8MB)을 또 받아 온다.
+     그게 "실행할 때마다 30초쯤에 렉이 걸린다" 의 정체였다.
+     디스코드 자산 URL 에 내용 해시가 들어 있으니, 시트 목록 지문이 그대로면
+     받아보지 않고 건너뛰어야 한다. */
+  console.log('\n[테마] 캐시 재수집 판정');
+
+  // 지문이 다르면 다시 모아야 한다
+  await boot(wc, 'masking.html', {
+    emojiVisible: false,
+    panelsVisible: true,
+    lightCached: true,
+    lightFp: '999-zzzz',
+    lightRefreshMs: 300
+  });
+  await wait(900);
+  check('지문이 다르면 건너뛰지 않음', await js(wc, '!!__DIO.lightRefreshSkipped'), false);
+
+  const fp = await js(wc, '__DIO.lightFpNow || ""');
+  check('현재 지문을 계산함', /^[0-9]+-[a-z0-9]+$/.test(fp), true);
+
+  // 같은 지문이면 통째로 건너뛴다 — 여기서 네트워크를 아낀다
+  await boot(wc, 'masking.html', {
+    emojiVisible: false,
+    panelsVisible: true,
+    lightCached: true,
+    lightFp: fp,
+    lightRefreshMs: 300
+  });
+  await wait(900);
+  check('지문이 같으면 재수집을 건너뜀', await js(wc, '!!__DIO.lightRefreshSkipped'), true);
+  check('수집 문도 열리지 않음', await js(wc, '!!__DIO.lightAllowed'), false);
+}
+
 /* ---------------- 펼치기 토글 ---------------- */
 async function testExpand(wc) {
   console.log('\n[펼치기] 라벨 클릭');
@@ -632,6 +667,7 @@ app.whenReady().then(async () => {
     await testBundle();
     const w = makeWindow();
     await testMasking(w.webContents);
+    await testLightRefresh(w.webContents);
     await testExpand(w.webContents);
     await testPerf(w.webContents);
     clearTimeout(guard);
