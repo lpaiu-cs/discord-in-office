@@ -2,7 +2,12 @@
      스크린샷에서 실제로 노출됐던 형태들을 그대로 재현한다:
      캐멀케이스 아바타, 배경이미지 아바타, 유튜브 임베드, 스티커, 사진(단일/캐러셀). -->
 <meta charset="utf-8"><title>masking fixture</title>
-<style>body{margin:0;font:13px sans-serif}li{list-style:none;padding:4px 8px}</style>
+<style>body{margin:0;font:13px sans-serif}li{list-style:none;padding:4px 8px}
+/* 디스코드가 하는 일: 나를 부른 메시지에 주황빛을 깐다 */
+.mentioned__m1{background-color:rgb(250,240,215)}
+.mentionedWrap__m2{background-color:rgb(250,240,215)}
+.mentioned__m1::after{content:"";position:absolute;inset:0;background-color:rgb(250,240,215)}
+</style>
 <div id="app-mount" class="theme-darker">
   <!-- 아래 크롬 4종은 실제 디스코드 DOM 에서 뜬 클래스·중첩을 그대로 옮긴 것이다.
        서버·채널 이름이 그대로 노출되던 자리다. -->
@@ -81,7 +86,9 @@ const rows = document.getElementById('rows');
 const li = (id, inner) =>
   '<li id="chat-messages-1-' + id + '" role="article" style="padding-left:72px">' +
   '<img class="avatar__h1" src="' + CDN + '/avatars/1/a.png" alt="쿠쿠">' +
-  '<span class="username__y">쿠쿠</span><div class="contents__x">' + inner + '</div></li>';
+  // 역할 색은 인라인 style 로 온다
+  '<span class="username__y" style="color:rgb(233,30,99)">쿠쿠</span>' +
+  '<div class="contents__x">' + inner + '</div></li>';
 
 rows.innerHTML =
   // 1) 링크 임베드 (embed* 클래스가 중첩된 구조 — 가장 바깥만 접혀야 한다)
@@ -102,6 +109,14 @@ rows.innerHTML =
     '<div class="stickerName__s3">시오짱</div></div>') +
   // 3) 단일 첨부 사진
   li(3, '<div class="imageWrapper__i1"><img class="lazyImg__i2" src="' + BIG + '"></div>') +
+  /* 5) 나에게 온 답장·멘션. 디스코드는 이 메시지에 주황빛 배경을 깔고,
+        그라데이션 역할을 가진 닉네임은 background-clip:text 로 그린다.
+        둘 다 워크시트에서 가장 먼저 눈에 띄는 것들이다. */
+  '<li id="chat-messages-1-5" role="article" class="mentioned__m1" style="padding-left:72px">' +
+  '<span class="username__y gradientName__g1" ' +
+  'style="background-image:linear-gradient(90deg,#f00,#00f);' +
+  '-webkit-background-clip:text;-webkit-text-fill-color:transparent">나미</span>' +
+  '<div class="contents__x mentionedWrap__m2">답장이다</div></li>' +
   // 4) 캐러셀 묶음 — 대표 하나만 버튼이 붙고 묶음 단위로 펼쳐져야 한다
   li(4,
     '<div class="carousel__c1">' +
