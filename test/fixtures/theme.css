@@ -1,0 +1,7 @@
+/* 라이트 토큰 수집 경로를 오프라인에서도 밟기 위한 시트.
+   픽스처에 스타일시트가 하나도 없으면 forceLightTokens 가 바로 빠져나가서
+   "지문이 언제 유효한가" 를 검사할 수 없다. */
+.theme-light {
+  --dio-test-token: rgb(1, 2, 3);
+  --dio-test-two: #abcdef;
+}

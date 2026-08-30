@@ -41,6 +41,37 @@ function checkAtMost(name, actual, limit) {
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const js = (wc, code) => wc.executeJavaScript(code);
 
+/* 픽스처를 HTTP 로도 띄울 수 있어야 하는 이유:
+   fetch 는 404·5xx 에 reject 하지 않고 오류 "본문" 을 돌려준다. 그 본문이 비어
+   있지 않으면 CSS 로 세어져서 수집이 온전한 것처럼 보인다. file:// 로는 이 상황을
+   못 만든다 — 없는 파일은 요청 자체가 실패해서 다른 경로를 탄다.
+   그래서 이 한 가지 검사를 위해 아주 작은 서버를 띄운다. */
+function startFixtureServer() {
+  const http = require('node:http');
+  const server = http.createServer((req, res) => {
+    if (req.url === '/bad.css') {
+      // 본문이 있는 404 — 확인하지 않으면 이게 CSS 로 세어진다
+      res.writeHead(404, { 'Content-Type': 'text/css' });
+      res.end('/* not found */ .theme-light { --dio-bad: red; }');
+      return;
+    }
+    const name = (req.url || '/').split('?')[0].replace(/^\//, '') || 'masking.html';
+    try {
+      const body = fs.readFileSync(path.join(FIX, path.basename(name)));
+      res.writeHead(200, {
+        'Content-Type': name.endsWith('.css') ? 'text/css' : 'text/html; charset=utf-8'
+      });
+      res.end(body);
+    } catch {
+      res.writeHead(404);
+      res.end('');
+    }
+  });
+  return new Promise((resolve) => {
+    server.listen(0, '127.0.0.1', () => resolve({ server, port: server.address().port }));
+  });
+}
+
 const PROBE = [
   'window.__vis = (sel) => {',
   '  const el = document.querySelector(sel);',
@@ -72,10 +103,12 @@ function makeWindow() {
   });
 }
 
-async function boot(wc, fixture, cfg) {
+async function boot(wc, fixture, cfg, before) {
   await wc.loadFile(path.join(FIX, fixture));
   await js(wc, 'window.__ready || true');
   await js(wc, PROBE);
+  // 부팅 전에 페이지를 손볼 기회 (예: 받을 수 없는 시트를 끼워 넣기)
+  if (before) await js(wc, before);
   await wc.insertCSS(fs.readFileSync(path.join(REPO, 'excel.css'), 'utf8'));
   await js(wc, bundle() + ';__DIO_BOOT(' + JSON.stringify(cfg) + ');');
   await wait(700);
@@ -444,6 +477,131 @@ async function testMasking(wc) {
   );
 }
 
+/* ---------------- 라이트 토큰 재수집 판정 ---------------- */
+async function testLightRefresh(wc) {
+  /* 캐시가 있어도 매번 다시 모으면 시트 수백 장(2.8MB)을 또 받아 온다.
+     그게 "실행할 때마다 30초쯤에 렉이 걸린다" 의 정체였다.
+     디스코드 자산 URL 에 내용 해시가 들어 있으니, 시트 목록 지문이 그대로면
+     받아보지 않고 건너뛰어야 한다. */
+  console.log('\n[테마] 캐시 재수집 판정');
+
+  // 지문이 다르면 다시 모아야 한다
+  await boot(wc, 'masking.html', {
+    emojiVisible: false,
+    panelsVisible: true,
+    lightCached: true,
+    lightFp: '999-zzzz',
+    lightRefreshMs: 300
+  });
+  await wait(900);
+  check('지문이 다르면 건너뛰지 않음', await js(wc, '!!__DIO.lightRefreshSkipped'), false);
+
+  const fp = await js(wc, '__DIO.lightFpNow || ""');
+  check('현재 지문을 계산함', /^[0-9]+-[a-z0-9]+$/.test(fp), true);
+
+  // 같은 지문이면 통째로 건너뛴다 — 여기서 네트워크를 아낀다
+  await boot(wc, 'masking.html', {
+    emojiVisible: false,
+    panelsVisible: true,
+    lightCached: true,
+    lightFp: fp,
+    lightRefreshMs: 300
+  });
+  await wait(900);
+  check('지문이 같으면 재수집을 건너뜀', await js(wc, '!!__DIO.lightRefreshSkipped'), true);
+  check('수집 문도 열리지 않음', await js(wc, '!!__DIO.lightAllowed'), false);
+
+  /* 지문은 "이 토큰을 실제로 만들어낸 시트 목록" 에만 붙어야 한다.
+     일부 시트를 못 받았는데도 지문을 남기면, 다음 실행이 불완전한 캐시를
+     정상으로 믿고 영영 재수집을 건너뛴다. */
+  console.log('\n[테마] 수집이 온전할 때만 지문을 남긴다');
+  await boot(wc, 'masking.html', { emojiVisible: false, panelsVisible: true, lightStartMs: 150 });
+  await wait(1200);
+  check('시트를 다 받으면 수집 성공', await js(wc, '!!__DIO.lightCssApplied'), true);
+  check('픽스처 토큰이 추출됨', await js(wc, '__DIO.lightTokenCount > 0'), true);
+  check('온전하므로 지문을 남김', await js(wc, '!!__DIO.lightComplete'), true);
+  check('지문 형식', await js(wc, '/^[0-9]+-[a-z0-9]+$/.test(__DIO.lightFp || "")'), true);
+
+  // 받을 수 없는 시트를 하나 끼워 넣으면 결과가 불완전하다
+  await boot(
+    wc,
+    'masking.html',
+    { emojiVisible: false, panelsVisible: true, lightStartMs: 150 },
+    [
+      'const bad = document.createElement("link");',
+      'bad.rel = "stylesheet";',
+      'bad.href = "does-not-exist.css";',
+      'document.head.appendChild(bad);',
+      'true;'
+    ].join('\n')
+  );
+  await wait(1200);
+  check('일부를 못 받으면 불완전으로 표시', await js(wc, '!!__DIO.lightComplete'), false);
+  check('지문을 비워 다음 실행이 다시 확인하게', await js(wc, '__DIO.lightFp'), '');
+}
+
+/* ---------------- 오류 응답도 불완전으로 ---------------- */
+async function testHttpErrorSheet(wc) {
+  console.log('\n[테마] 오류 응답을 성공으로 세지 않는지');
+  const { server, port } = await startFixtureServer();
+  try {
+    await wc.loadURL('http://127.0.0.1:' + port + '/masking.html');
+    await js(wc, 'window.__ready || true');
+    await js(wc, PROBE);
+    /* 본문이 있는 404 를 하나 끼워 넣는다. Response.ok 를 보지 않으면 그 본문이
+       CSS 로 세어져서 수집이 온전한 것처럼 통과하고, 토큰이 빠진 캐시에 유효한
+       지문이 붙는다. 그러면 CDN 이 정상화돼도 영영 재수집을 건너뛴다. */
+    await js(
+      wc,
+      [
+        'const bad = document.createElement("link");',
+        'bad.rel = "stylesheet";',
+        'bad.href = "/bad.css";',
+        'document.head.appendChild(bad);',
+        'true;'
+      ].join('\n')
+    );
+    await wc.insertCSS(fs.readFileSync(path.join(REPO, 'excel.css'), 'utf8'));
+    await js(
+      wc,
+      bundle() +
+        ';__DIO_BOOT({ emojiVisible: false, panelsVisible: true, lightStartMs: 150 });'
+    );
+    await wait(1500);
+
+    check('오류 응답이 섞이면 불완전으로 표시', await js(wc, '!!__DIO.lightComplete'), false);
+    check('그 경우 지문을 남기지 않음', await js(wc, '__DIO.lightFp'), '');
+  } finally {
+    server.close();
+  }
+}
+
+/* ---------------- 백업 전체 스캔 ---------------- */
+async function testBackupScan(wc) {
+  /* 백업 전체 스캔은 한가할 때 돌아야 한다. wantFull 을 예약 시점에 세우면
+     idle 콜백 전에 온 변이가 그 전체 스캔을 사용자 입력 중에 돌려버리고,
+     뒤늦은 idle 콜백이 빈 pending 으로 한 번 더 전체 스캔을 돌린다. */
+  console.log('\n[스캔] 백업 전체 스캔이 겹치지 않는지');
+  await wc.loadFile(path.join(FIX, 'chat.html'));
+  await wait(1000);
+  await wc.insertCSS(fs.readFileSync(path.join(REPO, 'excel.css'), 'utf8'));
+  await js(wc, bundle() + ';__DIO_BOOT({ emojiVisible: false, panelsVisible: true });');
+
+  /* idle 이 나지 않게 메인 스레드를 계속 붙잡는다 — 버그가 필요로 하는
+     "간격 발화 ~ idle 콜백" 창을 실제로 만든다. */
+  await js(wc, 'window.__busy = setInterval(() => { const e = performance.now() + 70; while (performance.now() < e) {} }, 100); true;');
+  await wait(21000); // 백업 주기 4초 × 5회분 — 차이가 배로 벌어져야 잡힌다
+  await js(wc, 'clearInterval(window.__busy); true;');
+  const full = await js(wc, '__DIO.fullScans || 0');
+  await js(wc, '__stopDriver()');
+  console.log('       21초 동안 전체 스캔 ' + full + '회');
+  /* 실측으로 잡은 값이다. 바쁜 상태에서 고친 버전은 3회(부팅 1 + 백업 2),
+     wantFull 을 예약 시점에 세우는 버그 버전은 4회가 나온다.
+     한가한 픽스처에서는 둘 다 4회라 구분이 안 됐다 — 그래서 위에서 메인
+     스레드를 붙잡아 idle 이 밀리는 실제 조건을 만든다. */
+  checkAtMost('전체 스캔이 겹쳐 돌지 않음', full, 6);
+}
+
 /* ---------------- 펼치기 토글 ---------------- */
 async function testExpand(wc) {
   console.log('\n[펼치기] 라벨 클릭');
@@ -632,6 +790,9 @@ app.whenReady().then(async () => {
     await testBundle();
     const w = makeWindow();
     await testMasking(w.webContents);
+    await testLightRefresh(w.webContents);
+    await testHttpErrorSheet(w.webContents);
+    await testBackupScan(w.webContents);
     await testExpand(w.webContents);
     await testPerf(w.webContents);
     clearTimeout(guard);

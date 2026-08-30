@@ -12,7 +12,7 @@
   'use strict';
   if (window.__DIO) return;
 
-  const DIO = (window.__DIO = { visible: true, booted: false, version: 10 });
+  const DIO = (window.__DIO = { visible: true, booted: false, version: 11, passMs: {} });
   const FILE_NAME = '재고관리_2026.xlsx';
 
   /* ---------- 스캔 스코프 · 캐시 ----------

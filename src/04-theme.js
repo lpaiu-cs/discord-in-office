@@ -53,9 +53,28 @@
   /* 지난 실행에서 뽑아둔 토큰은 메인 프로세스가 이미 insertCSS 로 넣었다.
      여기서는 "이미 적용됐다" 는 사실만 기록해 수집을 건너뛴다 —
      시작이 20초 걸리던 원인이 그 수집이었다. */
-  function markLightCached() {
+  function markLightCached(fp) {
     DIO.lightCssApplied = true;
     DIO.lightFromCache = true;
+    DIO.lightFp = fp || ''; // 지문이 없으면(옛 형식) 한 번은 다시 모은다
+  }
+
+  /* 디스코드 자산 URL 에는 내용 해시가 들어 있다. 그래서 시트 "목록" 만 비교해도
+     CSS 가 갈아끼워졌는지 알 수 있다 — 받아볼 필요가 없다.
+     암호학적 강도는 필요 없으니 짧은 문자열 해시로 충분하다. */
+  function currentSheets() {
+    return [...document.querySelectorAll('link[rel="stylesheet"]')].map((l) => l.href);
+  }
+
+  function fingerprintOf(hrefs) {
+    const list = [...hrefs].sort().join('|');
+    let h = 5381;
+    for (let i = 0; i < list.length; i++) h = ((h * 33) ^ list.charCodeAt(i)) >>> 0;
+    return list.length + '-' + h.toString(36);
+  }
+
+  function sheetFingerprint() {
+    return fingerprintOf(currentSheets());
   }
 
   async function fetchSheets(links) {
@@ -65,7 +84,12 @@
         const href = links[next++];
         if (cssCache.has(href)) continue;
         try {
-          cssCache.set(href, await (await fetch(href, { cache: 'force-cache' })).text());
+          const res = await fetch(href, { cache: 'force-cache' });
+          /* fetch 는 404·5xx 에도 reject 하지 않는다. 오류 본문이 비어 있지
+             않으면 그대로 CSS 로 세어져서, 토큰이 빠진 채로 "온전한 수집" 이
+             되고 그 지문이 저장된다. 나중에 CDN 이 정상으로 돌아와도 지문이
+             같으니 재수집을 계속 건너뛴다 — 빠진 토큰이 영영 남는다. */
+          cssCache.set(href, res.ok ? await res.text() : '');
         } catch {
           cssCache.set(href, '');
         }
@@ -119,8 +143,17 @@
       /* 다음 실행은 이걸 그대로 쓰면 된다 — 20초짜리 수집을 되풀이하지 않는다.
          완성된 CSS 가 아니라 토큰 맵을 넘긴다. 이 페이지는 원격 콘텐츠라,
          CSS 를 그대로 저장하게 두면 한 번의 오염이 다음 실행까지 살아남는다. */
+      /* 지문은 "이 토큰을 실제로 만들어낸 시트 목록" 에만 붙인다.
+           - 받다가 실패한 시트가 있으면 결과가 불완전하다
+           - 수집 중 디스코드가 청크를 더 붙였으면 지금 목록과 다르다
+         둘 중 하나라도 어긋나면 지문을 비워 다음 실행이 다시 확인하게 한다.
+         안 그러면 불완전한 캐시를 정상으로 믿고 영영 재수집을 건너뛴다. */
+      const used = fingerprintOf(links);
+      const complete = ok === links.length && used === fingerprintOf(currentSheets());
+      DIO.lightFp = complete ? used : '';
+      DIO.lightComplete = complete;
       if (window.dioBridge && window.dioBridge.saveLightTokens) {
-        window.dioBridge.saveLightTokens(Object.fromEntries(map));
+        window.dioBridge.saveLightTokens({ fp: DIO.lightFp, tokens: Object.fromEntries(map) });
       }
     } catch (e) {
       DIO.lastErr = 'forceLightTokens: ' + e.message;
