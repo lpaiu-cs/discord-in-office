@@ -72,10 +72,12 @@ function makeWindow() {
   });
 }
 
-async function boot(wc, fixture, cfg) {
+async function boot(wc, fixture, cfg, before) {
   await wc.loadFile(path.join(FIX, fixture));
   await js(wc, 'window.__ready || true');
   await js(wc, PROBE);
+  // 부팅 전에 페이지를 손볼 기회 (예: 받을 수 없는 시트를 끼워 넣기)
+  if (before) await js(wc, before);
   await wc.insertCSS(fs.readFileSync(path.join(REPO, 'excel.css'), 'utf8'));
   await js(wc, bundle() + ';__DIO_BOOT(' + JSON.stringify(cfg) + ');');
   await wait(700);
@@ -477,6 +479,60 @@ async function testLightRefresh(wc) {
   await wait(900);
   check('지문이 같으면 재수집을 건너뜀', await js(wc, '!!__DIO.lightRefreshSkipped'), true);
   check('수집 문도 열리지 않음', await js(wc, '!!__DIO.lightAllowed'), false);
+
+  /* 지문은 "이 토큰을 실제로 만들어낸 시트 목록" 에만 붙어야 한다.
+     일부 시트를 못 받았는데도 지문을 남기면, 다음 실행이 불완전한 캐시를
+     정상으로 믿고 영영 재수집을 건너뛴다. */
+  console.log('\n[테마] 수집이 온전할 때만 지문을 남긴다');
+  await boot(wc, 'masking.html', { emojiVisible: false, panelsVisible: true, lightStartMs: 150 });
+  await wait(1200);
+  check('시트를 다 받으면 수집 성공', await js(wc, '!!__DIO.lightCssApplied'), true);
+  check('픽스처 토큰이 추출됨', await js(wc, '__DIO.lightTokenCount > 0'), true);
+  check('온전하므로 지문을 남김', await js(wc, '!!__DIO.lightComplete'), true);
+  check('지문 형식', await js(wc, '/^[0-9]+-[a-z0-9]+$/.test(__DIO.lightFp || "")'), true);
+
+  // 받을 수 없는 시트를 하나 끼워 넣으면 결과가 불완전하다
+  await boot(
+    wc,
+    'masking.html',
+    { emojiVisible: false, panelsVisible: true, lightStartMs: 150 },
+    [
+      'const bad = document.createElement("link");',
+      'bad.rel = "stylesheet";',
+      'bad.href = "does-not-exist.css";',
+      'document.head.appendChild(bad);',
+      'true;'
+    ].join('\n')
+  );
+  await wait(1200);
+  check('일부를 못 받으면 불완전으로 표시', await js(wc, '!!__DIO.lightComplete'), false);
+  check('지문을 비워 다음 실행이 다시 확인하게', await js(wc, '__DIO.lightFp'), '');
+}
+
+/* ---------------- 백업 전체 스캔 ---------------- */
+async function testBackupScan(wc) {
+  /* 백업 전체 스캔은 한가할 때 돌아야 한다. wantFull 을 예약 시점에 세우면
+     idle 콜백 전에 온 변이가 그 전체 스캔을 사용자 입력 중에 돌려버리고,
+     뒤늦은 idle 콜백이 빈 pending 으로 한 번 더 전체 스캔을 돌린다. */
+  console.log('\n[스캔] 백업 전체 스캔이 겹치지 않는지');
+  await wc.loadFile(path.join(FIX, 'chat.html'));
+  await wait(1000);
+  await wc.insertCSS(fs.readFileSync(path.join(REPO, 'excel.css'), 'utf8'));
+  await js(wc, bundle() + ';__DIO_BOOT({ emojiVisible: false, panelsVisible: true });');
+
+  /* idle 이 나지 않게 메인 스레드를 계속 붙잡는다 — 버그가 필요로 하는
+     "간격 발화 ~ idle 콜백" 창을 실제로 만든다. */
+  await js(wc, 'window.__busy = setInterval(() => { const e = performance.now() + 70; while (performance.now() < e) {} }, 100); true;');
+  await wait(21000); // 백업 주기 4초 × 5회분 — 차이가 배로 벌어져야 잡힌다
+  await js(wc, 'clearInterval(window.__busy); true;');
+  const full = await js(wc, '__DIO.fullScans || 0');
+  await js(wc, '__stopDriver()');
+  console.log('       21초 동안 전체 스캔 ' + full + '회');
+  /* 실측으로 잡은 값이다. 바쁜 상태에서 고친 버전은 3회(부팅 1 + 백업 2),
+     wantFull 을 예약 시점에 세우는 버그 버전은 4회가 나온다.
+     한가한 픽스처에서는 둘 다 4회라 구분이 안 됐다 — 그래서 위에서 메인
+     스레드를 붙잡아 idle 이 밀리는 실제 조건을 만든다. */
+  checkAtMost('전체 스캔이 겹쳐 돌지 않음', full, 6);
 }
 
 /* ---------------- 펼치기 토글 ---------------- */
@@ -668,6 +724,7 @@ app.whenReady().then(async () => {
     const w = makeWindow();
     await testMasking(w.webContents);
     await testLightRefresh(w.webContents);
+    await testBackupScan(w.webContents);
     await testExpand(w.webContents);
     await testPerf(w.webContents);
     clearTimeout(guard);

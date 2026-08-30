@@ -62,14 +62,19 @@
   /* 디스코드 자산 URL 에는 내용 해시가 들어 있다. 그래서 시트 "목록" 만 비교해도
      CSS 가 갈아끼워졌는지 알 수 있다 — 받아볼 필요가 없다.
      암호학적 강도는 필요 없으니 짧은 문자열 해시로 충분하다. */
-  function sheetFingerprint() {
-    const list = [...document.querySelectorAll('link[rel="stylesheet"]')]
-      .map((l) => l.href)
-      .sort()
-      .join('|');
+  function currentSheets() {
+    return [...document.querySelectorAll('link[rel="stylesheet"]')].map((l) => l.href);
+  }
+
+  function fingerprintOf(hrefs) {
+    const list = [...hrefs].sort().join('|');
     let h = 5381;
     for (let i = 0; i < list.length; i++) h = ((h * 33) ^ list.charCodeAt(i)) >>> 0;
     return list.length + '-' + h.toString(36);
+  }
+
+  function sheetFingerprint() {
+    return fingerprintOf(currentSheets());
   }
 
   async function fetchSheets(links) {
@@ -133,7 +138,15 @@
       /* 다음 실행은 이걸 그대로 쓰면 된다 — 20초짜리 수집을 되풀이하지 않는다.
          완성된 CSS 가 아니라 토큰 맵을 넘긴다. 이 페이지는 원격 콘텐츠라,
          CSS 를 그대로 저장하게 두면 한 번의 오염이 다음 실행까지 살아남는다. */
-      DIO.lightFp = sheetFingerprint();
+      /* 지문은 "이 토큰을 실제로 만들어낸 시트 목록" 에만 붙인다.
+           - 받다가 실패한 시트가 있으면 결과가 불완전하다
+           - 수집 중 디스코드가 청크를 더 붙였으면 지금 목록과 다르다
+         둘 중 하나라도 어긋나면 지문을 비워 다음 실행이 다시 확인하게 한다.
+         안 그러면 불완전한 캐시를 정상으로 믿고 영영 재수집을 건너뛴다. */
+      const used = fingerprintOf(links);
+      const complete = ok === links.length && used === fingerprintOf(currentSheets());
+      DIO.lightFp = complete ? used : '';
+      DIO.lightComplete = complete;
       if (window.dioBridge && window.dioBridge.saveLightTokens) {
         window.dioBridge.saveLightTokens({ fp: DIO.lightFp, tokens: Object.fromEntries(map) });
       }

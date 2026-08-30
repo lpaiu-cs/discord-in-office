@@ -8,6 +8,8 @@
     roots = rootList && rootList.length ? rootList : null;
     const t0 = performance.now();
     DIO.scans = (DIO.scans || 0) + 1;
+    // 전체 스캔이 몇 번 돌았는지 — 백업 스캔이 겹쳐 도는 걸 잡는 지표다
+    if (!roots) DIO.fullScans = (DIO.fullScans || 0) + 1;
     resetScanCaches(); // 스캔 사이에는 계산 스타일 캐시를 믿지 않는다
     try {
       enforceLightTheme();
@@ -133,12 +135,17 @@
          스크롤하거나 타이핑하는 순간과 겹치지 않게 한다. timeout 을 두어
          계속 바쁘더라도 결국은 돈다. */
       setInterval(() => {
-        wantFull = true;
-        if (window.requestIdleCallback) {
-          requestIdleCallback(() => schedule(), { timeout: BACKUP_MS });
-        } else {
+        /* wantFull 을 예약 시점에 세우면 안 된다. idle 콜백이 돌기 전에
+           디스코드 변이가 schedule() 을 부르면 그 전체 스캔이 사용자 입력
+           중에 돌아버리고(미루려던 바로 그 상황), 뒤늦게 온 idle 콜백이
+           빈 pending 으로 한 번 더 전체 스캔을 돌린다.
+           한가해진 그 시점에 세우고 그 자리에서 예약한다. */
+        const run = () => {
+          wantFull = true;
           schedule();
-        }
+        };
+        if (window.requestIdleCallback) requestIdleCallback(run, { timeout: BACKUP_MS });
+        else run();
       }, BACKUP_MS);
 
       /* 토큰 수집은 페이지가 자리잡은 뒤에 시작한다. 부팅 직후에 2.8MB 를 더
@@ -151,7 +158,8 @@
          원인이라 반드시 검사가 붙어야 한다. main.js 는 넘기지 않으므로
          실제 실행에서는 아래 상수가 그대로 쓰인다. */
       const refreshMs = (cfg && cfg.lightRefreshMs) || LIGHT_REFRESH_MS;
-      const delay = DIO.lightFromCache ? refreshMs : LIGHT_START_MS;
+      const startMs = (cfg && cfg.lightStartMs) || LIGHT_START_MS;
+      const delay = DIO.lightFromCache ? refreshMs : startMs;
       setTimeout(() => {
         if (DIO.lightFromCache) {
           /* 디스코드가 CSS 를 갈아끼웠을 때만 다시 모은다.
