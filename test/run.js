@@ -41,6 +41,37 @@ function checkAtMost(name, actual, limit) {
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const js = (wc, code) => wc.executeJavaScript(code);
 
+/* 픽스처를 HTTP 로도 띄울 수 있어야 하는 이유:
+   fetch 는 404·5xx 에 reject 하지 않고 오류 "본문" 을 돌려준다. 그 본문이 비어
+   있지 않으면 CSS 로 세어져서 수집이 온전한 것처럼 보인다. file:// 로는 이 상황을
+   못 만든다 — 없는 파일은 요청 자체가 실패해서 다른 경로를 탄다.
+   그래서 이 한 가지 검사를 위해 아주 작은 서버를 띄운다. */
+function startFixtureServer() {
+  const http = require('node:http');
+  const server = http.createServer((req, res) => {
+    if (req.url === '/bad.css') {
+      // 본문이 있는 404 — 확인하지 않으면 이게 CSS 로 세어진다
+      res.writeHead(404, { 'Content-Type': 'text/css' });
+      res.end('/* not found */ .theme-light { --dio-bad: red; }');
+      return;
+    }
+    const name = (req.url || '/').split('?')[0].replace(/^\//, '') || 'masking.html';
+    try {
+      const body = fs.readFileSync(path.join(FIX, path.basename(name)));
+      res.writeHead(200, {
+        'Content-Type': name.endsWith('.css') ? 'text/css' : 'text/html; charset=utf-8'
+      });
+      res.end(body);
+    } catch {
+      res.writeHead(404);
+      res.end('');
+    }
+  });
+  return new Promise((resolve) => {
+    server.listen(0, '127.0.0.1', () => resolve({ server, port: server.address().port }));
+  });
+}
+
 const PROBE = [
   'window.__vis = (sel) => {',
   '  const el = document.querySelector(sel);',
@@ -509,6 +540,42 @@ async function testLightRefresh(wc) {
   check('지문을 비워 다음 실행이 다시 확인하게', await js(wc, '__DIO.lightFp'), '');
 }
 
+/* ---------------- 오류 응답도 불완전으로 ---------------- */
+async function testHttpErrorSheet(wc) {
+  console.log('\n[테마] 오류 응답을 성공으로 세지 않는지');
+  const { server, port } = await startFixtureServer();
+  try {
+    await wc.loadURL('http://127.0.0.1:' + port + '/masking.html');
+    await js(wc, 'window.__ready || true');
+    await js(wc, PROBE);
+    /* 본문이 있는 404 를 하나 끼워 넣는다. Response.ok 를 보지 않으면 그 본문이
+       CSS 로 세어져서 수집이 온전한 것처럼 통과하고, 토큰이 빠진 캐시에 유효한
+       지문이 붙는다. 그러면 CDN 이 정상화돼도 영영 재수집을 건너뛴다. */
+    await js(
+      wc,
+      [
+        'const bad = document.createElement("link");',
+        'bad.rel = "stylesheet";',
+        'bad.href = "/bad.css";',
+        'document.head.appendChild(bad);',
+        'true;'
+      ].join('\n')
+    );
+    await wc.insertCSS(fs.readFileSync(path.join(REPO, 'excel.css'), 'utf8'));
+    await js(
+      wc,
+      bundle() +
+        ';__DIO_BOOT({ emojiVisible: false, panelsVisible: true, lightStartMs: 150 });'
+    );
+    await wait(1500);
+
+    check('오류 응답이 섞이면 불완전으로 표시', await js(wc, '!!__DIO.lightComplete'), false);
+    check('그 경우 지문을 남기지 않음', await js(wc, '__DIO.lightFp'), '');
+  } finally {
+    server.close();
+  }
+}
+
 /* ---------------- 백업 전체 스캔 ---------------- */
 async function testBackupScan(wc) {
   /* 백업 전체 스캔은 한가할 때 돌아야 한다. wantFull 을 예약 시점에 세우면
@@ -724,6 +791,7 @@ app.whenReady().then(async () => {
     const w = makeWindow();
     await testMasking(w.webContents);
     await testLightRefresh(w.webContents);
+    await testHttpErrorSheet(w.webContents);
     await testBackupScan(w.webContents);
     await testExpand(w.webContents);
     await testPerf(w.webContents);

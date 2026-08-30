@@ -84,7 +84,12 @@
         const href = links[next++];
         if (cssCache.has(href)) continue;
         try {
-          cssCache.set(href, await (await fetch(href, { cache: 'force-cache' })).text());
+          const res = await fetch(href, { cache: 'force-cache' });
+          /* fetch 는 404·5xx 에도 reject 하지 않는다. 오류 본문이 비어 있지
+             않으면 그대로 CSS 로 세어져서, 토큰이 빠진 채로 "온전한 수집" 이
+             되고 그 지문이 저장된다. 나중에 CDN 이 정상으로 돌아와도 지문이
+             같으니 재수집을 계속 건너뛴다 — 빠진 토큰이 영영 남는다. */
+          cssCache.set(href, res.ok ? await res.text() : '');
         } catch {
           cssCache.set(href, '');
         }
