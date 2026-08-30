@@ -292,6 +292,42 @@ async function testMasking(wc) {
 
   /* 단축키만 있으면 지금 눌려 있는지 알 수 없고, 단축키를 모르면 쓰지도 못한다.
      리본에 상태가 보이는 버튼이 있어야 한다. */
+  /* 나를 부른 메시지의 주황빛 강조와, 역할 색·그라데이션 닉네임.
+     워크시트에서 가장 먼저 눈에 띄는 것들이라 색을 통일한다. */
+  console.log('\n[색] 멘션 강조와 닉네임');
+  const bg = (sel, pseudo) =>
+    js(wc, 'getComputedStyle(document.querySelector("' + sel + '")' +
+      (pseudo ? ', "' + pseudo + '"' : '') + ').backgroundColor');
+
+  check('멘션 메시지 배경이 흰색', await bg('#chat-messages-1-5'), 'rgb(255, 255, 255)');
+  check('멘션 내부 강조도 제거', await bg('.mentionedWrap__m2'), 'rgba(0, 0, 0, 0)');
+  check('멘션 오버레이(::after) 제거', await bg('#chat-messages-1-5', '::after'), 'rgba(0, 0, 0, 0)');
+  /* 행번호는 li 의 ::before 로 그린다. 멘션 강조를 지우다 그것까지 지우면
+     엑셀 눈금이 그 줄만 사라진다 — 실제로 부딪히는 자리라 같이 본다. */
+  check(
+    '행번호 눈금은 살아 있음',
+    await bg('#chat-messages-1-5', '::before'),
+    'rgb(239, 239, 239)'
+  );
+
+  check(
+    '역할 색 닉네임이 검정',
+    await js(wc, 'getComputedStyle(document.querySelector("#chat-messages-1-1 .username__y")).color'),
+    'rgb(51, 51, 51)'
+  );
+  /* 그라데이션 닉네임은 background-clip:text + -webkit-text-fill-color:transparent
+     로 그린다. color 만 덮으면 글자가 여전히 그라데이션으로 나온다. */
+  check(
+    '그라데이션 닉네임도 검정',
+    await js(wc, 'getComputedStyle(document.querySelector(".gradientName__g1")).webkitTextFillColor'),
+    'rgb(51, 51, 51)'
+  );
+  check(
+    '그라데이션 배경 제거',
+    await js(wc, 'getComputedStyle(document.querySelector(".gradientName__g1")).backgroundImage'),
+    'none'
+  );
+
   console.log('\n[리본] 토글 버튼');
   check('버튼 2개 존재', await js(wc, '__count("#dio-ribbon .dio-rbtn")'), 2);
   /* 안내 문구가 실제 단축키와 어긋나면 그대로 눌러도 아무 일이 없다.

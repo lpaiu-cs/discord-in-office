@@ -397,3 +397,42 @@ li[id^="chat-messages"] img[data-dio-expanded="1"] {
 /* 아바타를 없앤 자리의 여백. 어느 요소가 그 여백을 갖고 있는지는 스캔이
    실측해서 표시를 붙이고, 여기서는 그 표시만 본다. */
 .dio-hide .dio-nogutter { padding-left: 0 !important; }
+
+/* ============================================================
+   답장·멘션 강조 제거 — 나를 부른 메시지의 주황빛
+   ============================================================
+   라이트 토큰(--background-mentioned)을 transparent 로 덮어도 남는 경우가 있다.
+   색이 다른 변수나 인라인으로 오면 그렇다. 클래스로도 막는다.
+
+   주의: li 자체의 ::before 는 절대 건드리지 않는다 — 거기에 엑셀 행번호 눈금을
+   그려 두었다. 강조는 안쪽 요소와 ::after 쪽에서 처리한다. */
+li[id^="chat-messages"][class*="mention" i] { background: #fff !important; }
+
+li[id^="chat-messages"] [class*="mention" i] {
+  background-color: transparent !important;
+  border-color: transparent !important;
+}
+
+li[id^="chat-messages"][class*="mention" i]::after,
+li[id^="chat-messages"] [class*="mention" i]::after,
+li[id^="chat-messages"] [class*="mention" i]::before {
+  background-color: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+/* ============================================================
+   닉네임 색 통일 — 모드와 무관하게 항상
+   ============================================================
+   역할 색과 그라데이션 닉네임은 워크시트에서 가장 먼저 눈에 띈다.
+   역할 색은 인라인 style 로 오므로 !important 로 이기고, 그라데이션 닉네임은
+   background-clip:text + -webkit-text-fill-color:transparent 로 그려지므로
+   color 만 덮어서는 그대로 남는다. 셋을 같이 눌러야 검정이 나온다. */
+[class*="username" i],
+[class*="username" i] *,
+[class*="nickname" i],
+[class*="nickname" i] * {
+  color: #333 !important;
+  background-image: none !important;
+  -webkit-text-fill-color: #333 !important;
+}
